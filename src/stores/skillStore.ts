@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 export interface Skill {
   id: string
   name: string
+  minutesSpent?: number // Total minutes spent on this skill
 }
 
 export const useSkillStore = defineStore('skill', {
@@ -11,7 +12,13 @@ export const useSkillStore = defineStore('skill', {
   }),
   actions: {
     addSkill(skill: Skill) {
-      this.skills.push(skill)
+      this.skills.push({ ...skill, minutesSpent: skill.minutesSpent ?? 0 })
+    },
+    incrementSkillTime(skillId: string, minutes: number) {
+      const skill = this.skills.find(s => s.id === skillId)
+      if (skill) {
+        skill.minutesSpent = (skill.minutesSpent ?? 0) + minutes
+      }
     },
     updateSkill(updated: Skill) {
       const idx = this.skills.findIndex(s => s.id === updated.id)
@@ -21,4 +28,5 @@ export const useSkillStore = defineStore('skill', {
       this.skills = this.skills.filter(s => s.id !== id)
     },
   },
+  persist: true,
 })
