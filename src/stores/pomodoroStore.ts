@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useTaskStore } from './taskStore'
 
 let interval: ReturnType<typeof setInterval> | null = null
 
@@ -27,7 +28,11 @@ export const usePomodoroStore = defineStore('pomodoro', {
           this.timeLeft--
         } else {
           this.pause()
-          // Here you can emit an event or call a callback for completion
+          // on completion of timer
+          if (this.currentTaskId) {
+            const taskStore = useTaskStore()
+            taskStore.incrementPomodoro(this.currentTaskId, this.duration)
+          }
         }
       }, 1000)
     },

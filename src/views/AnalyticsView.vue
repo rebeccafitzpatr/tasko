@@ -24,6 +24,7 @@ const skillStore = useSkillStore()
 
 const tasks = taskStore.tasks
 const skills = skillStore.skills
+//const pomodoroLog = taskStore.pomodoroLog
 
 function countTasksForSkill(skillId: string) {
   return tasks.filter(t => t.skillId === skillId).length
@@ -34,4 +35,13 @@ function totalMinutesForSkill(skillId: string) {
     .filter(t => t.skillId === skillId)
     .reduce((sum, t) => sum + (t.minutesSpent || 0), 0)
 }
+/*
+function totalMinutesForSkillPerDay(skillId: string) {
+  const today = new Date().toISOString().slice(0, 10)
+  return pomodoroLog
+    .filter(log => log.skillId === skillId && log.completedAt.slice(0, 10) === today)
+    .reduce((sum, log) => sum + log.duration, 0)
+
+}
+*/
 </script>
