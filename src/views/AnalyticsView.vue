@@ -6,7 +6,9 @@
       <h2>Time spent per skill (task count)</h2>
       <ul>
         <li v-for="skill in skills" :key="skill.id">
-          {{ skill.name }}: {{ countTasksForSkill(skill.id) }}
+          {{ skill.name }}: {{ countTasksForSkill(skill.id) }} tasks under this skillset
+          <br />
+          Time spent on {{ skill.name }}: {{ totalMinutesForSkill(skill.id) }} minutes
         </li>
       </ul>
     </div>
@@ -25,5 +27,11 @@ const skills = skillStore.skills
 
 function countTasksForSkill(skillId: string) {
   return tasks.filter(t => t.skillId === skillId).length
+}
+
+function totalMinutesForSkill(skillId: string) {
+  return tasks
+    .filter(t => t.skillId === skillId)
+    .reduce((sum, t) => sum + (t.minutesSpent || 0), 0)
 }
 </script>

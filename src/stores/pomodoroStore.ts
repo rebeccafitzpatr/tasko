@@ -1,12 +1,14 @@
 import { defineStore } from 'pinia'
 
+let interval: ReturnType<typeof setInterval> | null = null
+
 export const usePomodoroStore = defineStore('pomodoro', {
   state: () => ({
     isRunning: false,
-    timeLeft: 25 * 60, // 25 minutes
+    timeLeft: 25 * 60,
     sessionType: 'work' as 'work' | 'break',
     currentTaskId: '' as string,
-    duration: 25, // in minutes
+    duration: 25,
   }),
   actions: {
     selectTask(taskId: string) {
@@ -17,17 +19,36 @@ export const usePomodoroStore = defineStore('pomodoro', {
       this.timeLeft = minutes * 60
     },
     start() {
+      if (this.isRunning) return
       this.isRunning = true
+      if (interval) clearInterval(interval)
+      interval = setInterval(() => {
+        if (this.timeLeft > 0) {
+          this.timeLeft--
+        } else {
+          this.pause()
+          // Here you can emit an event or call a callback for completion
+        }
+      }, 1000)
     },
     pause() {
       this.isRunning = false
+      if (interval) clearInterval(interval)
+      interval = null
     },
     reset() {
       this.timeLeft = this.duration * 60
       this.sessionType = 'work'
       this.isRunning = false
       this.currentTaskId = ''
+      if (interval) clearInterval(interval)
+      interval = null
     },
+    // Optional: call this on app unmount or before reload to clean up
+    cleanup() {
+      if (interval) clearInterval(interval)
+      interval = null
+    }
   },
   persist: true,
 })

@@ -33,11 +33,11 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useTaskStore } from '../stores/taskStore'
-import { useSkillStore } from '../stores/skillStore'
+//import { useSkillStore } from '../stores/skillStore'
 
 const pomodoroStore = usePomodoroStore()
 const taskStore = useTaskStore()
-const skillStore = useSkillStore()
+//const skillStore = useSkillStore()
 
 const tasks = taskStore.tasks
 const isRunning = computed(() => pomodoroStore.isRunning)
@@ -45,8 +45,6 @@ const sessionTypeLabel = computed(() => pomodoroStore.sessionType === 'work' ? '
 
 const selectedTaskId = ref('')
 const duration = ref(pomodoroStore.duration)
-
-let interval: number | undefined
 
 const minutes = computed(() => String(Math.floor(pomodoroStore.timeLeft / 60)).padStart(2, '0'))
 const seconds = computed(() => String(pomodoroStore.timeLeft % 60).padStart(2, '0'))
@@ -61,42 +59,20 @@ function start() {
   if (!pomodoroStore.isRunning && selectedTaskId.value) {
     pomodoroStore.selectTask(selectedTaskId.value)
     pomodoroStore.start()
-    clearInterval(interval)
-    interval = setInterval(() => {
-      if (pomodoroStore.timeLeft > 0) {
-        pomodoroStore.timeLeft--
-      } else {
-        pomodoroStore.pause()
-        clearInterval(interval)
-        // Log completed Pomodoro to the task and skill
-        if (pomodoroStore.currentTaskId) {
-          const minutes = pomodoroStore.duration
-          taskStore.incrementPomodoro(pomodoroStore.currentTaskId, minutes)
-          const task = taskStore.tasks.find(t => t.id === pomodoroStore.currentTaskId)
-          if (task) {
-            skillStore.incrementSkillTime(task.skillId, minutes)
-          }
-        }
-        // Optionally, reset timer for next Pomodoro (auto-repeat)
-        // pomodoroStore.reset()
-      }
-    }, 1000)
   }
 }
 
 function pause() {
   pomodoroStore.pause()
-  clearInterval(interval)
 }
 
 function reset() {
   pomodoroStore.reset()
-  clearInterval(interval)
   selectedTaskId.value = ''
   duration.value = pomodoroStore.duration
 }
 
 onUnmounted(() => {
-  clearInterval(interval)
+  //pomodoroStore.cleanup()   //do not cleanup every time we navigate away.
 })
 </script>
