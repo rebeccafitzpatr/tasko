@@ -33,6 +33,7 @@ export const usePomodoroStore = defineStore('pomodoro', {
             const taskStore = useTaskStore()
             taskStore.incrementPomodoro(this.currentTaskId, this.duration)
           }
+          this.reset()
         }
       }, 1000)
     },

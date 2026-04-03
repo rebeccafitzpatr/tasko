@@ -71,6 +71,7 @@ A productivity app to track the time spent on various tasks, categorized by skil
 - Customizable Pomodoro settings (session length, break intervals)
 - Dark mode and additional UI themes
 - LLM API integration for insights on user data
+- Have a backlog of tasks and random picker option to decide what task to do next
 
 ---
 

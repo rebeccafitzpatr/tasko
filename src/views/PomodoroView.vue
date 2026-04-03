@@ -13,14 +13,34 @@
         </select>
       </label>
     </div>
-    <div>
+    <!-- <div>
       <label>
         Duration (minutes):
         <input type="number" v-model.number="duration" min="1" max="60" :disabled="isRunning" @change="updateDuration" />
       </label>
+    </div> -->
+    <div class="timer-center">
+     <TimerCircle
+      :timeLeft="pomodoroStore.timeLeft"
+      :duration="pomodoroStore.duration * 60"
+      :size="160"
+      :stroke="10"
+    >
+    <template #default>
+    <div v-if="!isRunning && pomodoroStore.timeLeft === pomodoroStore.duration * 60" style="display:flex;flex-direction:column;align-items:center;">
+      <input
+        type="number"
+        v-model.number="duration"
+        min="1"
+        max="60"
+        style="width:3.5em;text-align:center;font-size:1.5em;"
+        @change="updateDuration"
+      />
+      <span style="font-size:0.9em;">min</span>
     </div>
-    <div>
-      <span>{{ minutes }}:{{ seconds }}</span>
+    <span v-else class="timer-text">{{ minutes }}:{{ seconds }}</span>
+  </template>
+    </TimerCircle>  
       <span>({{ sessionTypeLabel }})</span>
     </div>
     <button @click="start" :disabled="isRunning || !selectedTaskId">Start</button>
@@ -33,6 +53,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useTaskStore } from '../stores/taskStore'
+import TimerCircle from '../components/TimerCircle.vue'
 //import { useSkillStore } from '../stores/skillStore'
 
 const pomodoroStore = usePomodoroStore()
@@ -76,3 +97,13 @@ onUnmounted(() => {
   //pomodoroStore.cleanup()   //do not cleanup every time we navigate away.
 })
 </script>
+
+<style scoped>
+  .timer-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 20px 0;
+  }
+</style>
