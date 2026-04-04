@@ -5,12 +5,16 @@
       <input v-model="newSkill.name" placeholder="Skill name" required />
       <button type="submit">Add Skill</button>
     </form>
-    <ul>
-      <li v-for="skill in skills" :key="skill.id">
-        {{ skill.name }}
-        <button @click="deleteSkill(skill.id)">Delete</button>
-      </li>
-    </ul>
+    <div class="tasks-list">
+      <ul>
+        <li v-for="skill in skills" :key="skill.id">
+          <div class="task-item">
+            {{ skill.name }}
+            <button @click="deleteSkill(skill.id)">Delete</button>
+          </div>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 

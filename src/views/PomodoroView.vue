@@ -126,7 +126,7 @@ onUnmounted(() => {
   .pomodoro-controls {
     display: flex;
     flex-direction: column;
-    height: 50%;
+    height: 30%;
     justify-content: space-between;
   }
 </style>

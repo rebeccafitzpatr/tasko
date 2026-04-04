@@ -10,12 +10,17 @@
       </select>
       <button type="submit">Add Task</button>
     </form>
-    <ul>
-      <li v-for="task in tasks" :key="task.id">
-        {{ task.name }} ({{ getSkillName(task.skillId) }})
-        <button @click="deleteTask(task.id)">Delete</button>
-      </li>
-    </ul>
+
+    <div class="tasks-list">
+      <ul>
+        <li v-for="task in tasks" :key="task.id">
+          <div class="task-item">
+            {{ task.name }} ({{ getSkillName(task.skillId) }})
+            <button @click="deleteTask(task.id)">Delete</button>
+          </div>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -62,3 +67,27 @@ function getSkillName(skillId: string) {
   return skill ? skill.name : 'Unknown'
 }
 </script>
+
+<style>
+
+.tasks-list {
+  background-color: #e8e8e8;
+  padding: 1.5rem 2rem;
+  margin: 1rem;
+  border-radius: 12px;
+}
+
+.tasks-list ul{
+  list-style:none;
+}
+
+.task-item {
+  padding: 1rem;
+  margin: 1rem;
+  border: 1px solid #e2e2e2;
+  background-color:#eee;
+  border-radius: 8px;
+
+}
+
+</style>

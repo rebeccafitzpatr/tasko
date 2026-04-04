@@ -18,9 +18,13 @@
 <style>
 nav {
   margin-bottom: 1rem;
+  background-color: #f2f2f2;
 }
 nav a {
-  margin-right: 1rem;
+  margin: 0 auto;
+  text-decoration: none;
+  text-align:center;
+  color:rgb(51, 90, 244);
 }
 
 /* Center all page content */
