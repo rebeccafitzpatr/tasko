@@ -2,50 +2,58 @@
 <template>
   <div>
     <h1>Pomodoro Timer</h1>
-    <div>
-      <label>
-        Task:
-        <select v-model="selectedTaskId" :disabled="isRunning">
-          <option value="" disabled>Select task</option>
-          <option v-for="task in tasks" :key="task.id" :value="task.id">
-            {{ task.name }}
-          </option>
-        </select>
-      </label>
+    <div class="pomodoro-content">
+      
+      <!-- <div>
+        <label>
+          Duration (minutes):
+          <input type="number" v-model.number="duration" min="1" max="60" :disabled="isRunning" @change="updateDuration" />
+        </label>
+      </div> -->
+      <div class="timer-center">
+        <TimerCircle
+          :timeLeft="pomodoroStore.timeLeft"
+          :duration="pomodoroStore.duration * 60"
+          :size="160"
+          :stroke="10"
+        >
+        <template #default>
+          <div v-if="!isRunning && pomodoroStore.timeLeft === pomodoroStore.duration * 60" style="display:flex;flex-direction:column;align-items:center;">
+            <input
+              type="number"
+              v-model.number="duration"
+              min="1"
+              max="60"
+              style="width:3.5em;text-align:center;font-size:1.5em;"
+              @change="updateDuration"
+            />
+            <span style="font-size:0.9em;">min</span>
+          </div>
+          <span v-else class="timer-text">{{ minutes }}:{{ seconds }}</span>
+        </template>
+        </TimerCircle>  
+        <span>({{ sessionTypeLabel }})</span>
+      </div>
+
+      <div class="pomodoro-controls">
+        <label>
+          Task:
+          <select v-model="selectedTaskId" :disabled="isRunning">
+            <option value="" disabled>Select task</option>
+            <option v-for="task in tasks" :key="task.id" :value="task.id">
+              {{ task.name }}
+            </option>
+          </select>
+        </label>
+
+        <div class="timer-controls">
+          <button @click="start" :disabled="isRunning || !selectedTaskId">Start</button>
+          <button @click="pause" :disabled="!isRunning">Pause</button>
+          <button @click="reset">Reset</button>
+        </div>
+      </div>
+      
     </div>
-    <!-- <div>
-      <label>
-        Duration (minutes):
-        <input type="number" v-model.number="duration" min="1" max="60" :disabled="isRunning" @change="updateDuration" />
-      </label>
-    </div> -->
-    <div class="timer-center">
-     <TimerCircle
-      :timeLeft="pomodoroStore.timeLeft"
-      :duration="pomodoroStore.duration * 60"
-      :size="160"
-      :stroke="10"
-    >
-    <template #default>
-    <div v-if="!isRunning && pomodoroStore.timeLeft === pomodoroStore.duration * 60" style="display:flex;flex-direction:column;align-items:center;">
-      <input
-        type="number"
-        v-model.number="duration"
-        min="1"
-        max="60"
-        style="width:3.5em;text-align:center;font-size:1.5em;"
-        @change="updateDuration"
-      />
-      <span style="font-size:0.9em;">min</span>
-    </div>
-    <span v-else class="timer-text">{{ minutes }}:{{ seconds }}</span>
-  </template>
-    </TimerCircle>  
-      <span>({{ sessionTypeLabel }})</span>
-    </div>
-    <button @click="start" :disabled="isRunning || !selectedTaskId">Start</button>
-    <button @click="pause" :disabled="!isRunning">Pause</button>
-    <button @click="reset">Reset</button>
   </div>
 </template>
 
@@ -105,5 +113,20 @@ onUnmounted(() => {
     align-items: center;
     justify-content: center;
     margin: 20px 0;
+  }
+
+  .pomodoro-content {
+    display: flex;
+    height:50vh;
+    flex-direction: row;
+    gap: 40px;
+    align-items: center;
+  }
+
+  .pomodoro-controls {
+    display: flex;
+    flex-direction: column;
+    height: 50%;
+    justify-content: space-between;
   }
 </style>
