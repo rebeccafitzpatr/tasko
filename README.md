@@ -1,5 +1,15 @@
-# Vue 3 + TypeScript + Vite
+# Welcome to Tasko - the smart task tracking partner
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+The purpose of TASKO is to help you see where your time is going. It makes tracking your todo list and skill development easy - so that you WANT to be productive.
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+Its really driven by the fact that I really wish that something this intuitive was on the market ... I can't count the number of times that I've started a new notebook or journal or to-do list app with the intention of becoming a totally productive super machine and knocking off everything on my backlog! Sadly I've never found any of those methods to stick - I am only 110% sure its not a issue on my part ! LOL.
+
+Features as of now:
+ - create new tasks and complete pomodoro sessions towards those tasks
+ - assign tasks to skills, so all pomodoro session times go towards skills
+ - get a deep dive into your stats and analytics ! 
+
+To be added:
+ - cloud storage
+ - better UI
+ - release as mobile app with mobile features : offline, swipe features, notifications, widgets
