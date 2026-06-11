@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useTaskStore } from './taskStore'
+import { fetchPomodoros } from '../services/service'
 
 let interval: ReturnType<typeof setInterval> | null = null
 
@@ -8,18 +9,22 @@ export const usePomodoroStore = defineStore('pomodoro', {
     isRunning: false,
     timeLeft: 25 * 60,
     sessionType: 'work' as 'work' | 'break',
-    currentTaskId: '' as string,
+    currentTaskId: null as number | null,
     duration: 25,
+    pomodoroLog: [] as { id: number; taskId: number; duration: number; completed: boolean }[], // keep a local cache of logs
   }),
   actions: {
-    selectTask(taskId: string) {
+    selectTask(taskId: number) {
       this.currentTaskId = taskId
     },
     setDuration(minutes: number) {
       this.duration = minutes
       this.timeLeft = minutes * 60
     },
-    start() {
+    async loadPomodoros() {
+      this.pomodoroLog = await fetchPomodoros()
+    },
+    async start() {
       if (this.isRunning) return
       this.isRunning = true
       if (interval) clearInterval(interval)
@@ -29,7 +34,7 @@ export const usePomodoroStore = defineStore('pomodoro', {
         } else {
           this.pause()
           // on completion of timer
-          if (this.currentTaskId) {
+          if (this.currentTaskId != null) {
             const taskStore = useTaskStore()
             taskStore.incrementPomodoro(this.currentTaskId, this.duration)
           }
@@ -46,7 +51,7 @@ export const usePomodoroStore = defineStore('pomodoro', {
       this.timeLeft = this.duration * 60
       this.sessionType = 'work'
       this.isRunning = false
-      this.currentTaskId = ''
+      this.currentTaskId = null
       if (interval) clearInterval(interval)
       interval = null
     },

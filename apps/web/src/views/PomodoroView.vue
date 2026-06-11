@@ -72,7 +72,7 @@ const tasks = taskStore.tasks
 const isRunning = computed(() => pomodoroStore.isRunning)
 const sessionTypeLabel = computed(() => pomodoroStore.sessionType === 'work' ? 'Work' : 'Break')
 
-const selectedTaskId = ref('')
+const selectedTaskId = ref(0)
 const duration = ref(pomodoroStore.duration)
 
 const minutes = computed(() => String(Math.floor(pomodoroStore.timeLeft / 60)).padStart(2, '0'))
@@ -97,7 +97,7 @@ function pause() {
 
 function reset() {
   pomodoroStore.reset()
-  selectedTaskId.value = ''
+  selectedTaskId.value = 0
   duration.value = pomodoroStore.duration
 }
 

@@ -36,9 +36,9 @@ const tasks = taskStore.tasks
 const skills = skillStore.skills
 
 const newTask = ref({
-  id: '',
+  id: 0,
   name: '',
-  skillId: '',
+  skillId: 0,
   start: '',
   end: '',
   date: '',
@@ -49,20 +49,20 @@ function addTask() {
   const now = new Date()
   taskStore.addTask({
     ...newTask.value,
-    id: Math.random().toString(36).slice(2),
+    id: Math.floor(Math.random() * 1000000),
     start: now.toISOString(),
     end: now.toISOString(),
     date: now.toISOString().split('T')[0],
   })
   newTask.value.name = ''
-  newTask.value.skillId = ''
+  newTask.value.skillId = 0
 }
 
-function deleteTask(id: string) {
+function deleteTask(id: number) {
   taskStore.deleteTask(id)
 }
 
-function getSkillName(skillId: string) {
+function getSkillName(skillId: number | null | undefined) {
   const skill = skills.find(s => s.id === skillId)
   return skill ? skill.name : 'Unknown'
 }

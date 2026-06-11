@@ -2,23 +2,36 @@ import express, {type Request, type Response} from 'express';
 import cors from 'cors';
 import { SQL } from 'bun'
 
+import apiRouter from './api';
+
 const dbUrl = process.env.MYSQL_PUBLIC_URL;
 if (!dbUrl) {
-  throw new Error('MY_SQL_PUBLIC_URL environment variable is not set');
+  throw new Error('MYSQL_PUBLIC_URL environment variable is not set');
 }
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 let mysql;
+
 try {
-  mysql = new SQL(new URL(dbUrl));
-  const test = await mysql`SELECT 1 + 1 AS result`;
+  mysql = new SQL({
+    adapter: 'mysql',
+    hostname: process.env.MYSQL_HOST,
+    port: process.env.MYSQL_PORT,
+    database: process.env.MYSQL_DATABASE,
+    username: process.env.MYSQL_USERNAME,
+    password: process.env.MYSQL_PASSWORD,
+    tls: true,
+  });
+  const test = await mysql`SELECT 1 + 1 AS result`
   console.log('DB test result:', test);
 } catch (err) {
-  console.error('DB connection/test failed:', (err as any).message ?? err);
+  console.error('DB connection/test failed:', (err as Error).message);
   process.exit(1);
 }
+
+  app.use('/api', apiRouter);
 
 
 

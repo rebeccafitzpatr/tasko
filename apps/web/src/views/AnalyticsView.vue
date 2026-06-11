@@ -71,28 +71,28 @@ const tasks = taskStore.tasks
 const skills = skillStore.skills
 const pomodoroLog = taskStore.pomodoroLog
 
-function countTasksForSkill(skillId: string) {
+function countTasksForSkill(skillId: number) {
   return tasks.filter(t => t.skillId === skillId).length
 }
 
-function totalPomodorosForSkill(skillId: string) {
+function totalPomodorosForSkill(skillId: number) {
   return pomodoroLog.filter(log => log.skillId === skillId).length
 }
 
-function totalMinutesForSkill(skillId: string) {
+function totalMinutesForSkill(skillId: number) {
   return pomodoroLog
     .filter(log => log.skillId === skillId)
     .reduce((sum, log) => sum + log.duration, 0)
 }
 
-function totalMinutesForSkillPerDay(skillId: string) {
+function totalMinutesForSkillPerDay(skillId: number) {
   const today = new Date().toISOString().slice(0, 10)
   return pomodoroLog
     .filter(log => log.skillId === skillId && log.completedAt.slice(0, 10) === today)
     .reduce((sum, log) => sum + log.duration, 0)
 }
 
-function totalMinutesForSkillPerWeek(skillId: string) {
+function totalMinutesForSkillPerWeek(skillId: number) {
   const now = new Date()
   const startOfWeek = new Date(now)
   startOfWeek.setDate(now.getDate() - now.getDay())
@@ -105,7 +105,7 @@ function totalMinutesForSkillPerWeek(skillId: string) {
     .reduce((sum, log) => sum + log.duration, 0)
 }
 
-function totalMinutesForSkillPerYear(skillId: string) {
+function totalMinutesForSkillPerYear(skillId: number) {
   const now = new Date()
   const startOfYear = new Date(now.getFullYear(), 0, 1)
   return pomodoroLog
@@ -119,11 +119,11 @@ function totalMinutesForSkillPerYear(skillId: string) {
 const totalPomodoros = pomodoroLog.length
 const totalMinutes = pomodoroLog.reduce((sum, log) => sum + log.duration, 0)
 
-function getTaskName(taskId: string) {
+function getTaskName(taskId: number) {
   const task = tasks.find(t => t.id === taskId)
   return task ? task.name : 'Unknown'
 }
-function getSkillName(skillId: string) {
+function getSkillName(skillId: number | null | undefined) {
   const skill = skills.find(s => s.id === skillId)
   return skill ? skill.name : 'Unknown'
 }
