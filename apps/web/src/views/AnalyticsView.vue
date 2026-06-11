@@ -130,9 +130,6 @@ function totalMinutesForSkillPerYear(skillId: number) {
     .reduce((sum, log) => sum + log.duration, 0)
 }
 
-const totalPomodoros = pomodoroLog.length
-const totalMinutes = pomodoroLog.reduce((sum, log) => sum + log.duration, 0)
-
 function getTaskName(taskId: number | null | undefined) {
   const task = tasks.find(t => t.id === taskId)
   return task ? task.name : 'Unknown'

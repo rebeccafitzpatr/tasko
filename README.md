@@ -23,3 +23,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 - apps/backend/types.ts — TypeScript interfaces for Task, Skill, PomodoroLog
 - apps/backend/api.ts — Express router with all API endpoints
 - backend/index.ts — mount API routes and initialize DB (updated)
+
+
+- Analytics totals calculated from pomodoro logs
+- breakdowns taken from task table
