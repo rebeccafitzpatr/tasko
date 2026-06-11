@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { fetchSkills, createSkill, updateSkill, deleteSkill } from '../services/service'
+import { fetchSkills, createSkill, updateSkill, deleteSkill, updateSkillMinutes } from '../services/service'
 
 export interface Skill {
   id: number
@@ -20,19 +20,30 @@ export const useSkillStore = defineStore('skill', {
       const newSkill = await createSkill(skill.name);
       this.skills.push({ ...newSkill, minutesSpent: newSkill.minutesSpent ?? 0 });
     },
-    incrementSkillTime(skillId: number, minutes: number) {
-      //const skill = this.skills.find(s => s.id === skillId)
-     // if (skill) {
-        //skill.minutesSpent = (skill.minutesSpent ?? 0) + minutes
-      //}
-      
+    async incrementSkillTime(skillId: number, minutes: number) {
+      const s = this.skills.find(s => s.id === skillId);
+      const current = s?.minutesSpent ?? 0;
+      const total = current + minutes;
+      const refreshed = await updateSkillMinutes(skillId, total);
+      if (s) s.minutesSpent = refreshed.minutesSpent ?? total;
     },
     async updateSkill(updated: Skill) {
       // const idx = this.skills.findIndex(s => s.id === updated.id)
       // if (idx !== -1) this.skills[idx] = updated
-      const updatedskill = await updateSkill(updated.id, updated.name);
-      const idx = this.skills.findIndex(s => s.id === updated.id);
-      if (idx !== -1) this.skills[idx] = { ...this.skills[idx], ...updatedskill };
+      if (typeof updated.name === 'string') {
+        const refreshed = await updateSkill(updated.id, updated.name);
+        const idx = this.skills.findIndex(s => s.id === updated.id);
+        if (idx !== -1) this.skills[idx] = { ...this.skills[idx], ...refreshed };
+        return;
+      }
+
+      // If minutesSpent is provided, use new API
+      if (typeof updated.minutesSpent === 'number') {
+        const refreshed = await updateSkillMinutes(updated.id, updated.minutesSpent);
+        const idx = this.skills.findIndex(s => s.id === updated.id);
+        if (idx !== -1) this.skills[idx] = { ...this.skills[idx], ...(refreshed ?? {}) };
+        return;
+      }
     },
     async deleteSkill(id: number) {
       //this.skills = this.skills.filter(s => s.id !== id)

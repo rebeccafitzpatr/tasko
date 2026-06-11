@@ -29,10 +29,16 @@ router.post('/skills', async (req, res) => {
 
 router.put('/skills/:id', async (req, res) => {
   const { id } = req.params
-  const { name } = req.body
+  const { name, minutesSpent } = req.body
   try {
-    await db`UPDATE skills SET name = ${name} WHERE id = ${id}`
-    res.json({ id, name })
+    if (name != null) {
+      await db`UPDATE skills SET name = ${name} WHERE id = ${id}`
+    }
+    if (typeof minutesSpent === 'number') {
+      await db`UPDATE skills SET minutes_spent = ${minutesSpent} WHERE id = ${id}`
+    }
+    const rows = await db`SELECT id, name, minutes_spent AS minutesSpent FROM skills WHERE id = ${id}`
+    res.json(rows[0])
   } catch (e) {
     res.status(500).json({ error: (e as Error).message })
   }

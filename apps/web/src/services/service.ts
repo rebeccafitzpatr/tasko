@@ -57,6 +57,14 @@ export async function updateSkill(id: number, name: string): Promise<Skill> {
   });
   return handleResponse<Skill>(res);
 }
+export async function updateSkillMinutes(id: number, minutesSpent: number): Promise<Skill> {
+  const res = await fetch(`${API_BASE}/skills/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ minutesSpent }),
+  })
+  return handleResponse<Skill>(res)
+}
 export async function deleteSkill(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/skills/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(await res.text());

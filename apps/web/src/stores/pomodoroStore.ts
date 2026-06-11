@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { useTaskStore } from './taskStore'
 import { fetchPomodoros } from '../services/service'
+import { useSkillStore } from './skillStore'
 
 let interval: ReturnType<typeof setInterval> | null = null
 
@@ -24,7 +25,7 @@ export const usePomodoroStore = defineStore('pomodoro', {
     async loadPomodoros() {
       this.pomodoroLog = await fetchPomodoros()
     },
-    async start() {
+    start() {
       if (this.isRunning) return
       this.isRunning = true
       if (interval) clearInterval(interval)
@@ -37,6 +38,11 @@ export const usePomodoroStore = defineStore('pomodoro', {
           if (this.currentTaskId != null) {
             const taskStore = useTaskStore()
             taskStore.incrementPomodoro(this.currentTaskId, this.duration)
+            const skillStore = useSkillStore()
+            const task = taskStore.tasks.find(t => t.id === this.currentTaskId)
+            if (task?.skillId != null) {
+              skillStore.incrementSkillTime(task.skillId, this.duration)
+            }
           }
           this.reset()
         }
