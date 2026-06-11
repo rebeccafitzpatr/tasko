@@ -148,9 +148,26 @@ router.get('/pomodoros', async (_req, res) => {
 
 router.get('/analytics/summary', async (_req, res) => {
   try {
-    const totalPomodoros = (await db`SELECT COUNT(*) AS c FROM pomodoro_logs`)[0]?.c ?? 0
-    const totalMinutes = (await db`SELECT SUM(duration_minutes) AS sum FROM pomodoro_logs`)[0]?.sum ?? 0
-    res.json({ totalPomodoros, totalMinutes })
+    // DB-backed aggregates
+    const totalPomodoros = (await db`SELECT COUNT(*) AS c FROM pomodoro_logs`)[0]?.c ?? 0;
+    const totalMinutes = (await db`SELECT COALESCE(SUM(duration_minutes), 0) AS m FROM pomodoro_logs`)[0]?.m ?? 0;
+    const totalTasks = (await db`SELECT COUNT(*) AS c FROM tasks`)[0]?.c ?? 0;
+
+    // Optional: per-skill breakdown (if you want to surface this too)
+    const breakdown = await db`
+      SELECT s.id AS skillId, s.name AS skillName,
+             COUNT(pl.id) AS pomodoros,
+             COALESCE(SUM(pl.duration_minutes), 0) AS minutes
+      FROM skills s
+      LEFT JOIN pomodoro_logs pl ON pl.skill_id = s.id
+      GROUP BY s.id, s.name
+    `;
+
+    res.json({ totalPomodoros: Number(totalPomodoros),
+      totalMinutes: Number(totalMinutes),
+      totalTasks: Number(totalTasks),
+      breakdown: []
+    });
   } catch (e) {
     res.status(500).json({ error: (e as Error).message })
   }

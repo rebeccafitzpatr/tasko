@@ -20,10 +20,22 @@ export type PomodoroLog = {
   id?: number;
   taskId?: number | null;
   skillId?: number | null;
-  duration?: number;
-  durationMinutes?: number;
-  completedAt?: string;
+  duration: number;
+  durationMinutes: number;
+  completedAt: string;
   type?: string;
+};
+
+export type AnalyticsSummary = {
+  totalPomodoros: number;
+  totalMinutes?: number;
+  totalTasks?: number;
+  breakdown?: Array<{
+    skillId?: number
+    skillName?: string
+    pomodoros?: number
+    minutes?: number
+  }>;
 };
 
 const API_BASE = '/api'; // or 'http://localhost:3000/api' if not using a proxy
@@ -105,13 +117,13 @@ export async function addPomodoro(taskId: number, duration: number, skillId?: nu
   });
   return handleResponse<{ taskId: number; duration: number }>(res);
 }
-export async function fetchPomodoros(): Promise<any[]> {
+export async function fetchPomodoros(): Promise<PomodoroLog[]> {
   const res = await fetch(`${API_BASE}/pomodoros`);
-  return handleResponse<any[]>(res);
+  return handleResponse<PomodoroLog[]>(res);
 }
 
 // Analytics (optional)
-export async function fetchAnalytics(): Promise<{ totalPomodoros: number; totalMinutes: number }> {
+export async function fetchAnalytics(): Promise<AnalyticsSummary> {
   const res = await fetch(`${API_BASE}/analytics/summary`);
-  return handleResponse<{ totalPomodoros: number; totalMinutes: number }>(res);
+  return handleResponse<AnalyticsSummary>(res);
 }

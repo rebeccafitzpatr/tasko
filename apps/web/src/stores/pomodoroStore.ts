@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { useTaskStore } from './taskStore'
-import { fetchPomodoros } from '../services/service'
+import { fetchPomodoros, type PomodoroLog } from '../services/service'
 import { useSkillStore } from './skillStore'
 
 let interval: ReturnType<typeof setInterval> | null = null
@@ -12,7 +12,7 @@ export const usePomodoroStore = defineStore('pomodoro', {
     sessionType: 'work' as 'work' | 'break',
     currentTaskId: null as number | null,
     duration: 25,
-    pomodoroLog: [] as { id: number; taskId: number; duration: number; completed: boolean }[], // keep a local cache of logs
+    pomodoroLog: [] as PomodoroLog[], // keep a local cache of logs
   }),
   actions: {
     selectTask(taskId: number) {

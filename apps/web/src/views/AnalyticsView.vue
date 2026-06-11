@@ -5,15 +5,15 @@
     <div class="analytics-summary card">
       <div class="summary-item">
         <span class="summary-label">Total tasks</span>
-        <span class="summary-value">{{ tasks.length }}</span>
+        <span class="summary-value">{{ analyticsSummary.totalTasks }}</span>
       </div>
       <div class="summary-item">
         <span class="summary-label">Total Pomodoros</span>
-        <span class="summary-value">{{ totalPomodoros }}</span>
+        <span class="summary-value">{{ analyticsSummary.totalPomodoros }}</span>
       </div>
       <div class="summary-item">
         <span class="summary-label">Total time spent</span>
-        <span class="summary-value">{{ totalMinutes }} min</span>
+        <span class="summary-value">{{ analyticsSummary.totalMinutes }} min</span>
       </div>
     </div>
     <div class="card">
@@ -61,15 +61,29 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
+import { usePomodoroStore } from '../stores/pomodoroStore'
+import { fetchAnalytics, type AnalyticsSummary } from '../services/service'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
+const pomodoroStore = usePomodoroStore()
+const analyticsSummary = ref<AnalyticsSummary>({ totalPomodoros: 0, totalMinutes: 0 })
+onMounted(async () => {
+  analyticsSummary.value = await fetchAnalytics()
+  taskStore.loadTasks()
+  skillStore.loadSkills()
+  pomodoroStore.loadPomodoros()
+  fetchAnalytics().then(data => {
+    analyticsSummary.value = data
+  })
+})
 
 const tasks = taskStore.tasks
 const skills = skillStore.skills
-const pomodoroLog = taskStore.pomodoroLog
+const pomodoroLog = pomodoroStore.pomodoroLog
 
 function countTasksForSkill(skillId: number) {
   return tasks.filter(t => t.skillId === skillId).length
@@ -119,7 +133,7 @@ function totalMinutesForSkillPerYear(skillId: number) {
 const totalPomodoros = pomodoroLog.length
 const totalMinutes = pomodoroLog.reduce((sum, log) => sum + log.duration, 0)
 
-function getTaskName(taskId: number) {
+function getTaskName(taskId: number | null | undefined) {
   const task = tasks.find(t => t.id === taskId)
   return task ? task.name : 'Unknown'
 }
