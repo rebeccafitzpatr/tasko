@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { db } from './db' // uses the db.ts export
+import { db } from './db.js' // uses the db.ts export
 // import type { Skill, Task, PomodoroLog } from '../types' // optional
 
 const router = Router();
