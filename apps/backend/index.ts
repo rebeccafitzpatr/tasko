@@ -9,10 +9,22 @@ if (!dbUrl) {
   throw new Error('MYSQL_PUBLIC_URL environment variable is not set');
 }
 const app = express();
-const allowedOrigin = process.env.FRONTEND_URL;
+
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '').split(',').map(origin => origin.trim()).filter(Boolean);
+console.log('Allowed origins from env:', allowedOrigins);
+
+const whitelistOrigins: string[] = [
+  ...allowedOrigins,
+].filter(Boolean) as string[];
+
 
 app.use(cors({
-  origin: allowedOrigin,
+  origin: (origin, callback) => {
+    // Allow non-browser requests (e.g., curl) by default
+    if (!origin) return callback(null, true);
+    if (whitelistOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'), false);
+  },
   credentials: true
 }));
 

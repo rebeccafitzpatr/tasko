@@ -38,7 +38,7 @@ export type AnalyticsSummary = {
   }>;
 };
 
-const API_BASE = '/api'; // or 'http://localhost:3000/api' if not using a proxy
+const API_BASE = import.meta.env.VITE_API_BASE
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
