@@ -1,8 +1,9 @@
 import express, {type Request, type Response} from 'express';
 import cors from 'cors';
 import { SQL } from 'bun'
+import path from 'path';
 
-import apiRouter from './api';
+import apiRouter from './api.js';
 
 const dbUrl = process.env.MYSQL_PUBLIC_URL;
 if (!dbUrl) {
@@ -29,6 +30,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'dist')));
 
 let mysql;
 
