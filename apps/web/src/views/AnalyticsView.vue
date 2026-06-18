@@ -1,66 +1,71 @@
 
 <template>
-  <div class="analytics-root">
-    <h1>Analytics</h1>
-    <div class="analytics-summary card">
-      <div class="summary-item">
-        <span class="summary-label">Total tasks</span>
-        <span class="summary-value">{{ analyticsSummary.totalTasks }}</span>
-      </div>
-      <div class="summary-item">
-        <span class="summary-label">Total Pomodoros</span>
-        <span class="summary-value">{{ analyticsSummary.totalPomodoros }}</span>
-      </div>
-      <div class="summary-item">
-        <span class="summary-label">Total time spent</span>
-        <span class="summary-value">{{ analyticsSummary.totalMinutes }} min</span>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Time spent per skill</h2>
-      <ul class="skill-list">
-        <li v-for="skill in skills" :key="skill.id" class="skill-card">
-          <div class="skill-title">{{ skill.name }}</div>
-          <div class="skill-metrics">
-            <span>{{ countTasksForSkill(skill.id) }} tasks</span>
-            <span>{{ totalPomodorosForSkill(skill.id) }} Pomodoros</span>
-            <span>{{ totalMinutesForSkill(skill.id) }} min</span>
+  <section class="centered-page">
+    <div class="centered-card">
+      <div class="analytics-root">
+        <PageHeader title="Analytics" />
+        <div class="analytics-summary card">
+          <div class="summary-item">
+            <span class="summary-label">Total tasks</span>
+            <span class="summary-value">{{ analyticsSummary.totalTasks }}</span>
           </div>
-          <div class="skill-periods">
-            <span>Today: <b>{{ totalMinutesForSkillPerDay(skill.id) }}</b> min</span>
-            <span>This week: <b>{{ totalMinutesForSkillPerWeek(skill.id) }}</b> min</span>
-            <span>This year: <b>{{ totalMinutesForSkillPerYear(skill.id) }}</b> min</span>
+          <div class="summary-item">
+            <span class="summary-label">Total Pomodoros</span>
+            <span class="summary-value">{{ analyticsSummary.totalPomodoros }}</span>
           </div>
-        </li>
-      </ul>
-    </div>
-    <div class="card">
-      <h2>Recent Pomodoro Sessions</h2>
-      <div class="table-responsive">
-        <table class="analytics-table">
-          <thead>
-            <tr>
-              <th>Task</th>
-              <th>Skill</th>
-              <th>Duration (min)</th>
-              <th>Completed At</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="log in recentPomodoros" :key="log.completedAt + log.taskId">
-              <td>{{ getTaskName(log.taskId) }}</td>
-              <td>{{ getSkillName(log.skillId) }}</td>
-              <td>{{ log.duration }}</td>
-              <td>{{ formatDateTime(log.completedAt) }}</td>
-            </tr>
-          </tbody>
-        </table>
+          <div class="summary-item">
+            <span class="summary-label">Total time spent</span>
+            <span class="summary-value">{{ analyticsSummary.totalMinutes }} min</span>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Time spent per skill</h2>
+          <ul class="skill-list">
+            <li v-for="skill in skills" :key="skill.id" class="skill-card">
+              <div class="skill-title">{{ skill.name }}</div>
+              <div class="skill-metrics">
+                <span>{{ countTasksForSkill(skill.id) }} tasks</span>
+                <span>{{ totalPomodorosForSkill(skill.id) }} Pomodoros</span>
+                <span>{{ totalMinutesForSkill(skill.id) }} min</span>
+              </div>
+              <div class="skill-periods">
+                <span>Today: <b>{{ totalMinutesForSkillPerDay(skill.id) }}</b> min</span>
+                <span>This week: <b>{{ totalMinutesForSkillPerWeek(skill.id) }}</b> min</span>
+                <span>This year: <b>{{ totalMinutesForSkillPerYear(skill.id) }}</b> min</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Recent Pomodoro Sessions</h2>
+          <div class="table-responsive">
+            <table class="analytics-table">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Skill</th>
+                  <th>Duration (min)</th>
+                  <th>Completed At</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="log in recentPomodoros" :key="log.completedAt + log.taskId">
+                  <td>{{ getTaskName(log.taskId) }}</td>
+                  <td>{{ getSkillName(log.skillId) }}</td>
+                  <td>{{ log.duration }}</td>
+                  <td>{{ formatDateTime(log.completedAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
+import PageHeader from '../PageHeader.vue'
 import { onMounted, ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
@@ -155,6 +160,18 @@ const recentPomodoros = pomodoroLog.slice(-10).reverse()
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.centered-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 64px); /* adjust 64px to your header height if fixed */
+}
+.centered-card {
+  width: min(900px, 92%);
+  padding: 1rem;
+  /* keep content visually consistent across pages */
 }
 
 .card {

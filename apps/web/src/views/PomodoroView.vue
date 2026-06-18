@@ -1,63 +1,69 @@
 
 <template>
   <div>
-    <h1>Pomodoro Timer</h1>
-    <div class="pomodoro-content">
-      
-      <!-- <div>
-        <label>
-          Duration (minutes):
-          <input type="number" v-model.number="duration" min="1" max="60" :disabled="isRunning" @change="updateDuration" />
-        </label>
-      </div> -->
-      <div class="timer-center">
-        <TimerCircle
-          :timeLeft="pomodoroStore.timeLeft"
-          :duration="pomodoroStore.duration * 60"
-          :size="160"
-          :stroke="10"
-        >
-        <template #default>
-          <div v-if="!isRunning && pomodoroStore.timeLeft === pomodoroStore.duration * 60" style="display:flex;flex-direction:column;align-items:center;">
-            <input
-              type="number"
-              v-model.number="duration"
-              min="1"
-              max="60"
-              style="width:3.5em;text-align:center;font-size:1.5em;"
-              @change="updateDuration"
-            />
-            <span style="font-size:0.9em;">min</span>
+    <section class="centered-page">
+      <div class="card">
+        <PageHeader title="Pomodoro Timer" />
+        <div class="pomodoro-content">
+          
+          <!-- <div>
+            <label>
+              Duration (minutes):
+              <input type="number" v-model.number="duration" min="1" max="60" :disabled="isRunning" @change="updateDuration" />
+            </label>
+          </div> -->
+          <div class="timer-center">
+            <TimerCircle
+              :timeLeft="pomodoroStore.timeLeft"
+              :duration="pomodoroStore.duration * 60"
+              :size="160"
+              :stroke="10"
+            >
+            <template #default>
+              <div v-if="!isRunning && pomodoroStore.timeLeft === pomodoroStore.duration * 60" style="display:flex;flex-direction:column;align-items:center;">
+                <input
+                  type="number"
+                  v-model.number="duration"
+                  min="1"
+                  max="60"
+                  style="width:3.5em;text-align:center;font-size:1.5em;"
+                  @change="updateDuration"
+                />
+                <span style="font-size:0.9em;">min</span>
+              </div>
+              <span v-else class="timer-text">{{ minutes }}:{{ seconds }}</span>
+            </template>
+            </TimerCircle>  
+            <span>({{ sessionTypeLabel }})</span>
           </div>
-          <span v-else class="timer-text">{{ minutes }}:{{ seconds }}</span>
-        </template>
-        </TimerCircle>  
-        <span>({{ sessionTypeLabel }})</span>
-      </div>
 
-      <div class="pomodoro-controls">
-        <label>
-          Task:
-          <select v-model="selectedTaskId" :disabled="isRunning">
-            <option value="" disabled>Select task</option>
-            <option v-for="task in tasks" :key="task.id" :value="task.id">
-              {{ task.name }}
-            </option>
-          </select>
-        </label>
+          <div class="pomodoro-controls">
+            <label>
+              Task:
+              <select v-model="selectedTaskId" :disabled="isRunning">
+                <option value="" disabled>Select task</option>
+                <option v-for="task in tasks" :key="task.id" :value="task.id">
+                  {{ task.name }}
+                </option>
+              </select>
+            </label>
 
-        <div class="timer-controls">
-          <button @click="start" :disabled="isRunning || !selectedTaskId">Start</button>
-          <button @click="pause" :disabled="!isRunning">Pause</button>
-          <button @click="reset">Reset</button>
+            <div class="timer-controls">
+              <button @click="start" :disabled="isRunning || !selectedTaskId">Start</button>
+              <button @click="pause" :disabled="!isRunning">Pause</button>
+              <button @click="reset">Reset</button>
+            </div>
+          </div>
+          
         </div>
       </div>
-      
-    </div>
+    </section>
   </div>
+  
 </template>
 
 <script setup lang="ts">
+import PageHeader from '../PageHeader.vue'
 import { ref, computed, onUnmounted } from 'vue'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useTaskStore } from '../stores/taskStore'
@@ -107,6 +113,18 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+
+  .centered-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 64px); /* adjust 64px to your header height if fixed */
+  }
+  .centered-card {
+    width: min(900px, 92%);
+    padding: 1rem;
+    /* keep content visually consistent across pages */
+  }
   .timer-center {
     display: flex;
     flex-direction: column;
