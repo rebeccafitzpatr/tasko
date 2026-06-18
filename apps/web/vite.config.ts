@@ -1,20 +1,25 @@
 import { defineConfig } from 'vitest/config'
+import { loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [vue()],
-  test: {
-    environment: 'jsdom',
-    globals: true,
-  },
-  server: {
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_URL,
-        changeOrigin: true,
-        secure: false,
+export default ({ mode }: { mode: string }) => {
+  // Load env vars for the current mode
+  const env = loadEnv(mode, process.cwd(), '')
+
+  // Dev: fall back to localhost backend if not provided
+  const apiUrl = env.VITE_API_URL
+
+  return defineConfig({
+    plugins: [vue()],
+    server: {
+      proxy: {
+        '/api': {
+          target: apiUrl,
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
-  },
-})
+  })
+}
