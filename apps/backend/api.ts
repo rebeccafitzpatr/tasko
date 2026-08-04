@@ -197,7 +197,7 @@ router.post('/todos', async (req, res) => {
   const { taskId, title, dueDate } = req.body as Partial<{ taskId?: number; title?: string; dueDate?: string }>
   if (!title) return res.status(400).json({ error: 'title is required' })
   try {
-    await db`INSERT INTO todos (task_id, title, due_date, completed) VALUES (${taskId ?? null}, ${title}, ${dueDate ?? null}, ${0})`
+    await db`INSERT INTO todos (task_id, title, due_date, completed, created_at, updated_at) VALUES (${taskId ?? null}, ${title}, ${dueDate ?? null}, ${0}, NOW(), NOW())`
     const row = await db`SELECT LAST_INSERT_ID() AS id`
     const id = row[0]?.id
     const newRow = await db`

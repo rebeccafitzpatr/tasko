@@ -63,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import PageHeader from '../PageHeader.vue'
+import PageHeader from '../components/PageHeader.vue'
 import { ref, computed, onUnmounted } from 'vue'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useTaskStore } from '../stores/taskStore'

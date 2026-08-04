@@ -9,7 +9,7 @@
           <option v-for="t in tasks" :key="t.id" :value="t.id">{{ t.name }}</option>
         </select>
         <input v-model="newTodo.title" placeholder="New todo title" />
-        <button @click="addTodo">Add Todo</button>
+        <button type="button" @click="addTodo">Add Todo</button>
       </div>
       <ul>
         <li v-for="todo in todos" :key="todo.id">
@@ -23,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-import PageHeader from '@/components/PageHeader.vue'
+import PageHeader from '../components/PageHeader.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useTodoStore } from '../stores/todoStore'
 import { useTaskStore } from '../stores/taskStore'

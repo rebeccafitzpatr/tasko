@@ -65,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import PageHeader from '../PageHeader.vue'
+import PageHeader from '../components/PageHeader.vue'
 import { onMounted, ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
