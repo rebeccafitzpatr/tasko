@@ -27,3 +27,17 @@ Its really driven by the fact that I really wish that something this intuitive w
 
 - Analytics totals calculated from pomodoro logs
 - breakdowns taken from task table
+
+# Local development setup
+
+```
+    //backend
+    cd apps/backend
+    bun install
+    bun --watch index.ts
+
+    //frontend 
+    cd apps/web/src
+    bun install
+    bun run dev
+```

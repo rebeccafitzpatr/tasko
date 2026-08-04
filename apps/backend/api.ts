@@ -173,4 +173,76 @@ router.get('/analytics/summary', async (_req, res) => {
   }
 })
 
+router.get('/todos', async (_req, res) => {
+  try {
+    const rows = await db`
+      SELECT
+        id,
+        task_id AS taskId,
+        title,
+        completed AS completed,
+        due_date AS dueDate,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM todos
+      ORDER BY id DESC
+    `
+    res.json(rows)
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message })
+  }
+})
+
+router.post('/todos', async (req, res) => {
+  const { taskId, title, dueDate } = req.body as Partial<{ taskId?: number; title?: string; dueDate?: string }>
+  if (!title) return res.status(400).json({ error: 'title is required' })
+  try {
+    await db`INSERT INTO todos (task_id, title, due_date, completed) VALUES (${taskId ?? null}, ${title}, ${dueDate ?? null}, ${0})`
+    const row = await db`SELECT LAST_INSERT_ID() AS id`
+    const id = row[0]?.id
+    const newRow = await db`
+      SELECT
+        id,
+        task_id AS taskId,
+        title,
+        completed AS completed,
+        due_date AS dueDate,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM todos WHERE id = ${id}
+    `
+    res.status(201).json(newRow[0])
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message })
+  }
+})
+
+router.patch('/todos/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  const { title, taskId, dueDate, completed } = req.body
+  try {
+    if (title != null) await db`UPDATE todos SET title = ${title} WHERE id = ${id}`
+    if (taskId != null) await db`UPDATE todos SET task_id = ${taskId} WHERE id = ${id}`
+    if (dueDate != null) await db`UPDATE todos SET due_date = ${dueDate} WHERE id = ${id}`
+    if (typeof completed === 'boolean') await db`UPDATE todos SET completed = ${completed ? 1 : 0} WHERE id = ${id}`
+    const updated = await db`
+      SELECT id, task_id AS taskId, title, completed AS completed, due_date AS dueDate, created_at AS createdAt, updated_at AS updatedAt
+      FROM todos WHERE id = ${id}
+    `
+    res.json(updated[0])
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message })
+  }
+})
+
+router.delete('/todos/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  try {
+    await db`DELETE FROM todos WHERE id = ${id}`
+    res.status(204).end()
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message })
+  }
+});
+
 export default router

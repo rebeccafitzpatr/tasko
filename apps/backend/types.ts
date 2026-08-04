@@ -23,3 +23,13 @@ export interface PomodoroLog {
   completedAt: string
   type?: 'timer' | 'manual'
 }
+
+export interface Todo {
+  id: number;
+  taskId?: number | null;
+  title: string;
+  completed?: boolean;
+  dueDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
