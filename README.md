@@ -39,3 +39,13 @@ Its really driven by the fact that I really wish that something this intuitive w
 
 * pomodoroStore.ts
     * tracks if timer is running, remaining seconds, work/break mode, selected task, configured default duration for tasks, local cache of logs
+
+
+### Views
+* TasksView.vue : create task and view all tasks
+
+* SkillsView.vue : create skill form and view all skills
+
+* PomodoroView.vue : select task, set time, start/pause/reset task and pomodoro timer TimerCircle.vue
+
+* AnalyticsView.vue : Total tasks, pomodoros and minutes, per skill task and pomodoro counts.
