@@ -19,12 +19,13 @@
 nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-height: 38px;
   padding: 0px;
   box-sizing: border-box;
   background-color: #bbb;
   border-radius: 8px;
+  box-shadow: 3px 4px 0 rgba(0,0,0,0.18);
 }
 
 nav a {
