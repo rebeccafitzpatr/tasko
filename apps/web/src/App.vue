@@ -1,9 +1,9 @@
 <template>
   <div class="centered-container">
     <nav>
-      <router-link to="/tasks">Tasks</router-link> |
-      <router-link to="/skills">Skills</router-link> |
-      <router-link to="/pomodoro">Pomodoro</router-link> |
+      <router-link to="/tasks">Tasks</router-link>  
+      <router-link to="/skills">Skills</router-link> 
+      <router-link to="/pomodoro">Pomodoro</router-link> 
       <router-link to="/analytics">Analytics</router-link>
     </nav>
   
@@ -17,14 +17,28 @@
 
 <style>
 nav {
-  margin-bottom: 1rem;
-  background-color: #f2f2f2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0px;
+  box-sizing: border-box;
+  background-color: #bbb;
+  border-radius: 8px;
 }
+
 nav a {
-  margin: 0 auto;
+  display: block;
+  padding: 8px 12px;
+  background-color: #eee;
+  border: 2px solid #aaa;
+  border-radius: 8px;
   text-decoration: none;
-  text-align:center;
-  color:rgb(51, 90, 244);
+  color: #000;
+}
+
+.router-link-active {
+  background-color: rgba(170, 170, 170, 0.88);
 }
 
 /* Center all page content */
