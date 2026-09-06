@@ -27,3 +27,15 @@ Its really driven by the fact that I really wish that something this intuitive w
 
 - Analytics totals calculated from pomodoro logs
 - breakdowns taken from task table
+
+
+### Stores
+* taskStore.ts 
+    * load, add, update and delete tasks. Also record a completed Pomodoro for a task
+    
+
+* skillStore.ts     
+    * load, add skills; update skill names, update skill minutes, delete skills
+
+* pomodoroStore.ts
+    * tracks if timer is running, remaining seconds, work/break mode, selected task, configured default duration for tasks, local cache of logs
