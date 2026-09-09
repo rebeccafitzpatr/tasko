@@ -294,3 +294,16 @@ code {
     border-right-color: var(--border);
   }
 }
+
+.details {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  min-width: auto;
+}
+
+.details > * {
+  padding: 8px 4px;
+  border-radius: 6px;
+  border: 1px solid  rgb(133, 133, 133);
+}

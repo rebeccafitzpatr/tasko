@@ -2,10 +2,10 @@
 <template>
   <div>
     <h1>Tasks</h1>
-    <form @submit.prevent="addTask">
+    <form @submit.prevent="addTask" class="details">
       <input v-model="newTask.name" placeholder="Task name" required />
-      <select v-model="newTask.skillId" required>
-        <option value="" disabled>Select skill</option>
+      <select v-model="newTask.skillId" id="skill-selector" required>
+        <option value=0 disabled>Select skill</option>
         <option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skill.name }}</option>
       </select>
       <button type="submit">Add Task</button>

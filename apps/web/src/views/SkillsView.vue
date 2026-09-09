@@ -1,7 +1,7 @@
 <template>
   <div>
     <h1>Skills</h1>
-    <form @submit.prevent="addSkill">
+    <form @submit.prevent="addSkill" class="details">
       <input v-model="newSkill.name" placeholder="Skill name" required />
       <button type="submit">Add Skill</button>
     </form>
