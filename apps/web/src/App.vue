@@ -10,6 +10,7 @@
         <router-link to="/skills">Skills</router-link> 
         <router-link to="/pomodoro">Pomodoro</router-link> 
         <router-link to="/analytics">Analytics</router-link>
+        <router-link to="/settings">Settings</router-link>
       </div>
     </nav>
   
@@ -18,7 +19,15 @@
 </template>
 
 <script setup lang="ts">
-// App logic here (if needed)
+  const themes: Record<string, string> = {
+    grey: '#737373',
+    blue: '#2563a6',
+    green: '#27734a',
+    orange: '#b85c1b',
+  }
+
+  const savedTheme = localStorage.getItem('theme-key') || 'grey'
+  document.documentElement.style.setProperty('--theme-color', themes[savedTheme] || themes.grey)
 </script>
 
 <style>
@@ -29,7 +38,7 @@ nav {
   min-height: 38px;
   padding: 0px 12px;
   box-sizing: border-box;
-  background-color: #bbb;
+  background-color: var(--theme-medium);
   border-radius: 8px;
   box-shadow: 3px 4px 0 rgba(0,0,0,0.18);
 }
@@ -50,14 +59,15 @@ nav a {
   display: block;
   padding: 8px 12px;
   background-color: #eee;
-  border: 2px solid #aaa;
+  border: 2px solid var(--theme-color);
   border-radius: 8px;
   text-decoration: none;
   color: #000;
 }
 
 .router-link-active {
-  background-color: rgba(170, 170, 170, 0.88);
+  background-color: var(--theme-color);
+  color: #fff;
 }
 
 /* Center all page content */
@@ -74,7 +84,7 @@ nav a {
   align-items: stretch;
 
   text-align: center;
-  background: #fafafa;
+  background: var(--bg);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
 }

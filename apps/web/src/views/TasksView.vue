@@ -71,7 +71,7 @@ function getSkillName(skillId: number | null | undefined) {
 <style>
 
 .tasks-list {
-  background-color: #e8e8e8;
+  background-color: var(--theme-light);
   padding: 1.5rem 2rem;
   margin: 1rem;
   border-radius: 12px;
@@ -84,8 +84,8 @@ function getSkillName(skillId: number | null | undefined) {
 .task-item {
   padding: 1rem;
   margin: 1rem;
-  border: 1px solid #e2e2e2;
-  background-color:#eee;
+  border: 1px solid var(--theme-medium);
+  background-color: var(--bg);
   border-radius: 8px;
 
 }

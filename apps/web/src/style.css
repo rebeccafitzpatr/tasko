@@ -4,10 +4,10 @@
   --bg: #fff;
   --border: #e5e4e7;
   --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  --accent: var(--theme-color);
+  --accent-bg: var(--theme-light);
+  --accent-border: var(--theme-medium);
+  --social-bg: var(--theme-light);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -25,7 +25,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --theme-color: #bbb;
+  --theme-color: #737373;
   --theme-light: color-mix(in srgb, var(--theme-color), white 85%);
   --theme-medium: color-mix(in srgb, var(--theme-color), white 55%);
   --theme-dark: color-mix(in srgb, var(--theme-color), black 25%);
@@ -44,10 +44,10 @@
     --bg: #16171d;
     --border: #2e303a;
     --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
+    --accent: var(--theme-color);
+    --accent-bg: var(--theme-light);
+    --accent-border: var(--theme-medium);
+    --social-bg: var(--theme-light);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
@@ -312,7 +312,7 @@ code {
 .details > * {
   padding: 8px 4px;
   border-radius: 6px;
-  border: 1px solid  rgb(133, 133, 133);
+  border: 1px solid var(--theme-medium);
 }
 
 .delete-button {
@@ -323,6 +323,15 @@ code {
   border: 1px solid var(--theme-text);
   border-radius: 6px;
   cursor: pointer;
+}
+
+.tasks-list {
+  background-color: var(--theme-light);
+}
+
+.task-item {
+  background-color: var(--bg);
+  border-color: var(--theme-medium);
 }
 
 .delete-button:hover {
