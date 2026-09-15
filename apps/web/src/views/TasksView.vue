@@ -16,7 +16,7 @@
         <li v-for="task in tasks" :key="task.id">
           <div class="task-item">
             {{ task.name }} ({{ getSkillName(task.skillId) }})
-            <button @click="deleteTask(task.id)">Delete</button>
+            <button class="delete-button" @click="deleteTask(task.id)">Delete</button>
           </div>
         </li>
       </ul>

@@ -10,7 +10,7 @@
         <li v-for="skill in skills" :key="skill.id">
           <div class="task-item">
             {{ skill.name }}
-            <button @click="deleteSkill(skill.id)">Delete</button>
+            <button class="delete-button" @click="deleteSkill(skill.id)">Delete</button>
           </div>
         </li>
       </ul>

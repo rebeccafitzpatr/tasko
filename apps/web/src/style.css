@@ -25,6 +25,13 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
+  --theme-color: #bbb;
+  --theme-light: color-mix(in srgb, var(--theme-color), white 85%);
+  --theme-medium: color-mix(in srgb, var(--theme-color), white 55%);
+  --theme-dark: color-mix(in srgb, var(--theme-color), black 25%);
+  --theme-text: color-mix(in srgb, var(--theme-color), black 65%);
+
+
   @media (max-width: 1024px) {
     font-size: 16px;
   }
@@ -306,4 +313,23 @@ code {
   padding: 8px 4px;
   border-radius: 6px;
   border: 1px solid  rgb(133, 133, 133);
+}
+
+.delete-button {
+  margin-left: 12px;
+  padding: 6px 10px;
+  color: white;
+  background: var(--theme-dark);
+  border: 1px solid var(--theme-text);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.delete-button:hover {
+  background: var(--theme-text);
+}
+
+.delete-button:focus-visible {
+  outline: 2px solid var(--theme-color);
+  outline-offset: 2px;
 }
