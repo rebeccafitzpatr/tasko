@@ -196,6 +196,12 @@ p {
   border-radius: 6px;
 }
 
+.timer-controls > * {
+  min-height: 40px;
+  padding: 8px 12px;
+  margin: 0 4px;
+}
+
 input,
 select,
 button {
@@ -213,14 +219,16 @@ select {
 
 button {
   cursor: pointer;
-  background: var(--theme-color);
+  background: var(--theme-dark);
   border-color: var(--theme-color);
+  border-radius: 6px;
   color: #ffffff;
 }
 
 button:hover {
   background: var(--theme-text);
   border-color: var(--theme-text);
+  color: #ffffff;
 }
 
 input:focus,
@@ -287,6 +295,7 @@ select option:disabled {
   color: #ffffff;
   background: var(--theme-dark);
   border: 1px solid var(--theme-text);
+  border-radius: 6px;
 }
 
 .delete-button:hover {
