@@ -4,10 +4,16 @@
     <h1>Tasks</h1>
     <form @submit.prevent="addTask" class="details">
       <input v-model="newTask.name" placeholder="Task name" required />
-      <select v-model="newTask.skillId" id="skill-selector" required>
-        <option value=0 disabled>Select skill</option>
-        <option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skill.name }}</option>
-      </select>
+      <CustomSelect
+        v-model="newTask.skillId"
+        placeholder="Select skill"
+        :options="
+          skills.map(skill => ({
+            value: skill.id,
+            label: skill.name,
+          }))
+        "
+      />
       <button type="submit">Add Task</button>
     </form>
 
@@ -28,6 +34,7 @@
 import { ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
+import CustomSelect from '../components/CustomSelect.vue'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
@@ -38,7 +45,7 @@ const skills = skillStore.skills
 const newTask = ref({
   id: 0,
   name: '',
-  skillId: 0,
+  skillId: null as number | null,
   start: '',
   end: '',
   date: '',
@@ -55,7 +62,7 @@ function addTask() {
     date: now.toISOString().split('T')[0],
   })
   newTask.value.name = ''
-  newTask.value.skillId = 0
+  newTask.value.skillId = null
 }
 
 function deleteTask(id: number) {

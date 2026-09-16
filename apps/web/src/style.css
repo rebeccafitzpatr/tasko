@@ -179,15 +179,14 @@ p {
 
 .details {
   display: flex;
+  align-items:stretch;
   justify-content: center;
   gap: 1rem;
-  min-width: 0;
 }
 
-.details > *,
-input,
-select,
-button {
+.details > input,
+.details > select,
+.details > button {
   min-height: 40px;
   padding: 8px 12px;
   color: var(--text-strong);
@@ -198,7 +197,17 @@ button {
 }
 
 input,
+select,
+button {
+  font: inherit;
+}
+
+input,
 select {
+  min-width: 0;
+}
+
+.details .custom-select {
   min-width: 0;
 }
 
@@ -223,7 +232,21 @@ a:focus-visible {
 }
 
 select {
-  color-scheme: inherit;
+  appearance: auto;
+  color: var(--text-strong);
+  background-color: var(--control-bg);
+  border-color: var(--border);
+  accent-color: var(--theme-color);
+}
+
+select option {
+  color: var(--text-strong);
+  background-color: var(--control-bg);
+}
+
+select option:disabled {
+  color: var(--text);
+  background-color: var(--control-bg);
 }
 
 /* Task and skill lists */

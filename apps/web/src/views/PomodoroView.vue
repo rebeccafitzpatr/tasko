@@ -38,12 +38,17 @@
       <div class="pomodoro-controls">
         <label>
           Task:
-          <select v-model="selectedTaskId" :disabled="isRunning">
-            <option value="" disabled>Select task</option>
-            <option v-for="task in tasks" :key="task.id" :value="task.id">
-              {{ task.name }}
-            </option>
-          </select>
+          <CustomSelect
+            v-model="selectedTaskId"
+            placeholder="Select task"
+            :disabled="isRunning"
+            :options="
+              tasks.map(task => ({
+                value: task.id,
+                label: task.name,
+              }))
+            "
+          />
         </label>
 
         <div class="timer-controls">
@@ -62,6 +67,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useTaskStore } from '../stores/taskStore'
 import TimerCircle from '../components/TimerCircle.vue'
+import CustomSelect from '../components/CustomSelect.vue'
 //import { useSkillStore } from '../stores/skillStore'
 
 const pomodoroStore = usePomodoroStore()
@@ -72,7 +78,7 @@ const tasks = taskStore.tasks
 const isRunning = computed(() => pomodoroStore.isRunning)
 const sessionTypeLabel = computed(() => pomodoroStore.sessionType === 'work' ? 'Work' : 'Break')
 
-const selectedTaskId = ref(0)
+const selectedTaskId = ref<number | null>(null)
 const duration = ref(pomodoroStore.duration)
 
 const minutes = computed(() => String(Math.floor(pomodoroStore.timeLeft / 60)).padStart(2, '0'))
@@ -85,20 +91,20 @@ function updateDuration() {
 }
 
 function start() {
-  if (!pomodoroStore.isRunning && selectedTaskId.value) {
+  if (!pomodoroStore.isRunning && selectedTaskId.value !== null) {
     pomodoroStore.selectTask(selectedTaskId.value)
     pomodoroStore.start()
   }
 }
 
-function pause() {
-  pomodoroStore.pause()
-}
-
 function reset() {
   pomodoroStore.reset()
-  selectedTaskId.value = 0
+  selectedTaskId.value = null
   duration.value = pomodoroStore.duration
+}
+
+function pause() {
+  pomodoroStore.pause()
 }
 
 onUnmounted(() => {
