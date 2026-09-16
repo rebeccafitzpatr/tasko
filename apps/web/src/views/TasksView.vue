@@ -2,12 +2,18 @@
 <template>
   <div>
     <h1>Tasks</h1>
-    <form @submit.prevent="addTask">
+    <form @submit.prevent="addTask" class="details">
       <input v-model="newTask.name" placeholder="Task name" required />
-      <select v-model="newTask.skillId" required>
-        <option value="" disabled>Select skill</option>
-        <option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skill.name }}</option>
-      </select>
+      <CustomSelect
+        v-model="newTask.skillId"
+        placeholder="Select skill"
+        :options="
+          skills.map(skill => ({
+            value: skill.id,
+            label: skill.name,
+          }))
+        "
+      />
       <button type="submit">Add Task</button>
     </form>
 
@@ -16,7 +22,7 @@
         <li v-for="task in tasks" :key="task.id">
           <div class="task-item">
             {{ task.name }} ({{ getSkillName(task.skillId) }})
-            <button @click="deleteTask(task.id)">Delete</button>
+            <button class="delete-button" @click="deleteTask(task.id)">Delete</button>
           </div>
         </li>
       </ul>
@@ -28,6 +34,7 @@
 import { ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
+import CustomSelect from '../components/CustomSelect.vue'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
@@ -38,7 +45,7 @@ const skills = skillStore.skills
 const newTask = ref({
   id: 0,
   name: '',
-  skillId: 0,
+  skillId: null as number | null,
   start: '',
   end: '',
   date: '',
@@ -55,7 +62,7 @@ function addTask() {
     date: now.toISOString().split('T')[0],
   })
   newTask.value.name = ''
-  newTask.value.skillId = 0
+  newTask.value.skillId = null
 }
 
 function deleteTask(id: number) {
@@ -71,7 +78,7 @@ function getSkillName(skillId: number | null | undefined) {
 <style>
 
 .tasks-list {
-  background-color: #e8e8e8;
+  background-color: var(--theme-light);
   padding: 1.5rem 2rem;
   margin: 1rem;
   border-radius: 12px;
@@ -84,8 +91,8 @@ function getSkillName(skillId: number | null | undefined) {
 .task-item {
   padding: 1rem;
   margin: 1rem;
-  border: 1px solid #e2e2e2;
-  background-color:#eee;
+  border: 1px solid var(--theme-medium);
+  background-color: var(--bg);
   border-radius: 8px;
 
 }

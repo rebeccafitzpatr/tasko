@@ -1,7 +1,7 @@
 <template>
   <div>
     <h1>Skills</h1>
-    <form @submit.prevent="addSkill">
+    <form @submit.prevent="addSkill" class="details">
       <input v-model="newSkill.name" placeholder="Skill name" required />
       <button type="submit">Add Skill</button>
     </form>
@@ -10,7 +10,7 @@
         <li v-for="skill in skills" :key="skill.id">
           <div class="task-item">
             {{ skill.name }}
-            <button @click="deleteSkill(skill.id)">Delete</button>
+            <button class="delete-button" @click="deleteSkill(skill.id)">Delete</button>
           </div>
         </li>
       </ul>
