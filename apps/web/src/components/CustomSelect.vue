@@ -27,7 +27,7 @@
         :class="{ 'is-selected': option.value === modelValue }"
         role="option"
         :aria-selected="option.value === modelValue"
-        @click="selectOption(option)"
+        @pointerdown.prevent.stop="selectOption(option)"
       >
         {{ option.label }}
       </li>
@@ -73,8 +73,8 @@ function toggle() {
 }
 
 function selectOption(option: SelectOption) {
-  emit('update:modelValue', option.value)
   isOpen.value = false
+  emit('update:modelValue', option.value)
 }
 
 function handleTriggerKeydown(event: KeyboardEvent) {
