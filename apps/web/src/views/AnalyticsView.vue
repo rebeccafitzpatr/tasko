@@ -158,7 +158,7 @@ const recentPomodoros = pomodoroLog.slice(-10).reverse()
 }
 
 .card {
-  background: #fff;
+  background: var(--surface);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.07);
   padding: 1.5rem 2rem;
@@ -179,13 +179,13 @@ const recentPomodoros = pomodoroLog.slice(-10).reverse()
   align-items: center;
 }
 .summary-label {
-  color: #888;
+  color: var(--text);
   font-size: 1em;
 }
 .summary-value {
   font-size: 2em;
   font-weight: bold;
-  color: #42b983;
+  color: var(--theme-text);
 }
 
 .skill-list {
@@ -197,7 +197,7 @@ const recentPomodoros = pomodoroLog.slice(-10).reverse()
   gap: 1.5rem;
 }
 .skill-card {
-  background: #f8fafc;
+  background: var(--surface-muted);
   border-radius: 10px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
   padding: 1rem 1.5rem;
@@ -216,13 +216,13 @@ const recentPomodoros = pomodoroLog.slice(-10).reverse()
   display: flex;
   gap: 1.2em;
   margin-bottom: 0.5em;
-  color: #333;
+  color: var(--text-strong);
 }
 .skill-periods {
   display: flex;
   gap: 1.2em;
   font-size: 0.95em;
-  color: #666;
+  color: var(--text);
 }
 
 .table-responsive {
@@ -235,12 +235,12 @@ const recentPomodoros = pomodoroLog.slice(-10).reverse()
 }
 .analytics-table th, .analytics-table td {
   padding: 0.6em 1em;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border);
   text-align: left;
 }
 .analytics-table th {
-  background: #f3f3f3;
-  color: #333;
+  background: var(--surface-muted);
+  color: var(--text-strong);
   font-weight: 600;
 }
 .analytics-table tr:last-child td {

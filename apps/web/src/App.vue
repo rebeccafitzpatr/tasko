@@ -58,16 +58,16 @@ nav {
 nav a {
   display: block;
   padding: 8px 12px;
-  background-color: #eee;
+  background-color: var(--surface);
   border: 2px solid var(--theme-color);
   border-radius: 8px;
   text-decoration: none;
-  color: #000;
+  color: var(--text-strong);
 }
 
 .router-link-active {
   background-color: var(--theme-color);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 /* Center all page content */
@@ -84,7 +84,7 @@ nav a {
   align-items: stretch;
 
   text-align: center;
-  background: var(--bg);
+  background: var(--surface);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
 }

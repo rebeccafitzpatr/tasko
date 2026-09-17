@@ -5,9 +5,11 @@
   --surface: #ffffff;
   --surface-muted: color-mix(in srgb, var(--theme-color), white 91%);
   --control-bg: #ffffff;
+  --control-hover: color-mix(in srgb, var(--theme-color), white 96%);
 
   --text: #625d68;
   --text-strong: #111015;
+  --text-on-accent: #ffffff;
   --border: color-mix(in srgb, var(--theme-color), white 55%);
   --border-strong: color-mix(in srgb, var(--theme-color), white 30%);
 
@@ -19,6 +21,8 @@
   --accent: var(--theme-color);
   --accent-bg: var(--surface-muted);
   --accent-border: var(--border-strong);
+  --bg: var(--surface);
+  --text-h: var(--text-strong);
 
   --shadow:
     0 10px 15px -3px rgba(0, 0, 0, 0.1),
@@ -43,9 +47,11 @@
     --surface: #1b1d23;
     --surface-muted: color-mix(in srgb, #1b1d23, var(--theme-color) 14%);
     --control-bg: #24272e;
+    --control-hover: color-mix(in srgb, #24272e, var(--theme-color) 20%);
 
     --text: #b9bbc3;
     --text-strong: #f4f4f5;
+    --text-on-accent: #ffffff;
     --border: color-mix(in srgb, var(--theme-color), white 25%);
     --border-strong: color-mix(in srgb, var(--theme-color), white 42%);
 
@@ -56,6 +62,8 @@
 
     --accent-bg: var(--surface-muted);
     --accent-border: var(--border-strong);
+    --bg: var(--surface);
+    --text-h: var(--text-strong);
 
     --shadow:
       0 10px 15px -3px rgba(0, 0, 0, 0.4),
@@ -170,7 +178,7 @@ p {
 }
 
 .centered-container nav a.router-link-active {
-  color: #ffffff;
+  color: var(--text-on-accent);
   background: var(--theme-color);
   border-color: var(--theme-color);
 }
@@ -222,13 +230,13 @@ button {
   background: var(--theme-dark);
   border-color: var(--theme-color);
   border-radius: 6px;
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 
 button:hover {
   background: var(--theme-text);
   border-color: var(--theme-text);
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 
 input:focus,
@@ -292,7 +300,7 @@ select option:disabled {
   min-height: 34px;
   margin-left: 12px;
   padding: 6px 10px;
-  color: #ffffff;
+  color: var(--text-on-accent);
   background: var(--theme-dark);
   border: 1px solid var(--theme-text);
   border-radius: 6px;
