@@ -5,15 +5,18 @@
     <div class="analytics-summary card">
       <div class="summary-item">
         <span class="summary-label">Total tasks</span>
-        <span class="summary-value">{{ analyticsSummary.totalTasks }}</span>
+        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+        <span v-else class="summary-value">{{ analyticsStore.summary.totalTasks }}</span>
       </div>
       <div class="summary-item">
         <span class="summary-label">Total Pomodoros</span>
-        <span class="summary-value">{{ analyticsSummary.totalPomodoros }}</span>
+        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+        <span v-else class="summary-value">{{ analyticsStore.summary.totalPomodoros }}</span>
       </div>
       <div class="summary-item">
         <span class="summary-label">Total time spent</span>
-        <span class="summary-value">{{ analyticsSummary.totalMinutes }} min</span>
+        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+        <span v-else class="summary-value">{{ analyticsStore.summary.totalMinutes }} min</span>
       </div>
     </div>
     <div class="card">
@@ -65,20 +68,19 @@ import { computed, onMounted, ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
-import { fetchAnalytics, type AnalyticsSummary } from '../services/service'
+import { useAnalyticsStore } from '../stores/analyticsStore'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
 const pomodoroStore = usePomodoroStore()
-const analyticsSummary = ref<AnalyticsSummary>({ totalPomodoros: 0, totalMinutes: 0 })
+const analyticsStore = useAnalyticsStore()
 onMounted(async () => {
-  analyticsSummary.value = await fetchAnalytics()
-  taskStore.loadTasks()
-  skillStore.loadSkills()
-  pomodoroStore.loadPomodoros()
-  fetchAnalytics().then(data => {
-    analyticsSummary.value = data
-  })
+  await Promise.all([
+    analyticsStore.load(),
+    taskStore.loadTasks(),
+    skillStore.loadSkills(),
+    pomodoroStore.loadPomodoros(),
+  ])
 })
 
 const tasks = taskStore.tasks

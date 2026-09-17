@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useSkillStore } from './skillStore'
+import { useAnalyticsStore } from './analyticsStore'
 import { fetchTasks, createTask, updateTask, deleteTask, addPomodoro } from '../services/service'
 
 export interface Task {
@@ -62,6 +63,7 @@ export const useTaskStore = defineStore('task', {
         if (deletedTask) this.tasks.splice(taskIndex, 0, deletedTask)
         console.error(e);
       }
+      useAnalyticsStore().invalidate()
     },
     async incrementPomodoro(taskId: number, minutes: number) {
       try {
