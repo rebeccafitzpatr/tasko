@@ -2,20 +2,24 @@
 <template>
   <div>
     <h1>Tasks</h1>
-    <form @submit.prevent="addTask" class="details">
-      <input v-model="newTask.name" placeholder="Task name" required />
-      <CustomSelect
-        v-model="newTask.skillId"
-        placeholder="Select skill"
-        :options="
-          skills.map(skill => ({
-            value: skill.id,
-            label: skill.name,
-          }))
-        "
-      />
-      <button type="submit">Add Task</button>
-    </form>
+    <div class="task-form">
+      <form @submit.prevent="addTask" class="details">
+        <input v-model="newTask.name" placeholder="Task name" required />
+        <CustomSelect
+          v-model="newTask.skillId"
+          placeholder="Select skill"
+          :options="
+            skills.map(skill => ({
+              value: skill.id,
+              label: skill.name,
+            }))
+          "
+          @update:modelValue="clearSkillError"
+        />
+        <button type="submit">Add Task</button>
+      </form>
+      <p v-if="skillError" class="form-error" role="alert">{{ skillError }}</p>
+    </div>
 
     <div class="tasks-list">
       <ul>
@@ -41,6 +45,7 @@ const skillStore = useSkillStore()
 
 const tasks = taskStore.tasks
 const skills = skillStore.skills
+const skillError = ref('')
 
 const newTask = ref({
   id: 0,
@@ -52,7 +57,14 @@ const newTask = ref({
 })
 
 function addTask() {
-  if (!newTask.value.name || !newTask.value.skillId) return
+  if (!newTask.value.name || !newTask.value.skillId) {
+    if (!newTask.value.skillId) {
+      skillError.value = 'Choose a skill before adding this task.'
+    }
+    return
+  }
+
+  skillError.value = ''
   const now = new Date()
   taskStore.addTask({
     ...newTask.value,
@@ -63,6 +75,10 @@ function addTask() {
   })
   newTask.value.name = ''
   newTask.value.skillId = null
+}
+
+function clearSkillError() {
+  skillError.value = ''
 }
 
 function deleteTask(id: number) {
@@ -76,6 +92,22 @@ function getSkillName(skillId: number | null | undefined) {
 </script>
 
 <style>
+
+.task-form {
+  width: 100%;
+}
+
+.form-error {
+  width: 100%;
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.8rem;
+  color: var(--theme-text);
+  font-size: 0.85rem;
+  text-align: left;
+  background: color-mix(in srgb, var(--theme-color), transparent 88%);
+  border-left: 3px solid var(--theme-color);
+  border-radius: 4px;
+}
 
 .tasks-list {
   background-color: var(--theme-light);

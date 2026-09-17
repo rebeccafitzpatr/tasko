@@ -52,11 +52,13 @@
                 label: task.name,
               }))
             "
+            @update:modelValue="clearStartError"
           />
         </label>
 
+        <p v-if="startError" class="start-error" role="alert">{{ startError }}</p>
         <div class="timer-controls">
-          <button @click="start" :disabled="isRunning || !selectedTaskId">Start</button>
+          <button @click="start" :disabled="isRunning">Start</button>
           <button @click="pause" :disabled="!isRunning">Pause</button>
           <button @click="reset">Reset</button>
         </div>
@@ -84,6 +86,7 @@ const sessionTypeLabel = computed(() => pomodoroStore.sessionType === 'work' ? '
 
 const selectedTaskId = ref<number | null>(null)
 const duration = ref(pomodoroStore.duration)
+const startError = ref('')
 
 const minutes = computed(() => String(Math.floor(pomodoroStore.timeLeft / 60)).padStart(2, '0'))
 const seconds = computed(() => String(pomodoroStore.timeLeft % 60).padStart(2, '0'))
@@ -95,16 +98,27 @@ function updateDuration() {
 }
 
 function start() {
-  if (!pomodoroStore.isRunning && selectedTaskId.value !== null) {
-    pomodoroStore.selectTask(selectedTaskId.value)
-    pomodoroStore.start()
+  if (pomodoroStore.isRunning) return
+
+  if (selectedTaskId.value === null) {
+    startError.value = 'Select a task before starting the session.'
+    return
   }
+
+  startError.value = ''
+  pomodoroStore.selectTask(selectedTaskId.value)
+  pomodoroStore.start()
+}
+
+function clearStartError() {
+  startError.value = ''
 }
 
 function reset() {
   pomodoroStore.reset()
   selectedTaskId.value = null
   duration.value = pomodoroStore.duration
+  startError.value = ''
 }
 
 function pause() {
@@ -176,6 +190,18 @@ onUnmounted(() => {
     justify-content: center;
     min-width: 0;
     padding: 1rem;
+  }
+
+  .start-error {
+    width: 100%;
+    margin: -1.2rem 0;
+    padding: 0.65rem 0.8rem;
+    color: var(--theme-text);
+    font-size: 0.85rem;
+    text-align: left;
+    background: color-mix(in srgb, var(--theme-color), transparent 88%);
+    border-left: 3px solid var(--theme-color);
+    border-radius: 4px;
   }
 
   .pomodoro-controls label {
