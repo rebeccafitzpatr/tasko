@@ -52,14 +52,15 @@ export const useTaskStore = defineStore('task', {
       }
     },
     async deleteTask(id: number) {
-      //this.tasks = this.tasks.filter(t => t.id !== id)
+      const taskIndex = this.tasks.findIndex(task => task.id === id)
+      const deletedTask = taskIndex === -1 ? undefined : this.tasks[taskIndex]
+      if (taskIndex !== -1) this.tasks.splice(taskIndex, 1)
+
       try {
         await deleteTask(id);
-        this.tasks = this.tasks.filter(t => t.id !== id);
       } catch (e) {
+        if (deletedTask) this.tasks.splice(taskIndex, 0, deletedTask)
         console.error(e);
-        // Optional: reconcile with backend
-        await this.loadTasks();
       }
     },
     async incrementPomodoro(taskId: number, minutes: number) {
