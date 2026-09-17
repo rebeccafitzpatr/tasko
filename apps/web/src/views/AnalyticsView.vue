@@ -61,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
@@ -143,7 +143,16 @@ function formatDateTime(dt: string) {
   return d.toLocaleString()
 }
 
-const recentPomodoros = pomodoroLog.slice(-10).reverse()
+const recentPomodoros = computed(() =>
+  pomodoroStore.pomodoroLog
+    .filter(log => {
+      const taskExists = log.taskId != null && taskStore.tasks.some(task => task.id === log.taskId)
+      const skillExists = log.skillId == null || skillStore.skills.some(skill => skill.id === log.skillId)
+      return taskExists && skillExists
+    })
+    .slice(-10)
+    .reverse(),
+)
 // ...existing script code...
 </script>
 

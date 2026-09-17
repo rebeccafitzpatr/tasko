@@ -148,9 +148,21 @@ router.get('/pomodoros', async (_req, res) => {
 
 router.get('/analytics/summary', async (_req, res) => {
   try {
-    // DB-backed aggregates
-    const totalPomodoros = (await db`SELECT COUNT(*) AS c FROM pomodoro_logs`)[0]?.c ?? 0;
-    const totalMinutes = (await db`SELECT COALESCE(SUM(duration_minutes), 0) AS m FROM pomodoro_logs`)[0]?.m ?? 0;
+    // Only count sessions whose task and skill still exist.
+    const totalPomodoros = (await db`
+      SELECT COUNT(*) AS c
+      FROM pomodoro_logs pl
+      INNER JOIN tasks t ON t.id = pl.task_id
+      LEFT JOIN skills s ON s.id = pl.skill_id
+      WHERE pl.skill_id IS NULL OR s.id IS NOT NULL
+    `)[0]?.c ?? 0;
+    const totalMinutes = (await db`
+      SELECT COALESCE(SUM(pl.duration_minutes), 0) AS m
+      FROM pomodoro_logs pl
+      INNER JOIN tasks t ON t.id = pl.task_id
+      LEFT JOIN skills s ON s.id = pl.skill_id
+      WHERE pl.skill_id IS NULL OR s.id IS NOT NULL
+    `)[0]?.m ?? 0;
     const totalTasks = (await db`SELECT COUNT(*) AS c FROM tasks`)[0]?.c ?? 0;
 
     // Optional: per-skill breakdown (if you want to surface this too)
