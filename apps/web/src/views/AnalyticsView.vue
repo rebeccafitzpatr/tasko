@@ -184,6 +184,8 @@ const recentPomodoros = computed(() =>
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 1rem;
+  border-top: 4px solid var(--theme-color);
+  background: color-mix(in srgb, var(--theme-color), var(--surface) 92%);
 }
 
 .summary-item {
@@ -281,6 +283,19 @@ const recentPomodoros = computed(() =>
   padding: 0.6rem 0.75rem;
   border-bottom: 1px solid var(--border);
   text-align: left;
+}
+
+.analytics-table th {
+  color: var(--text-on-accent);
+  background: var(--theme-color);
+}
+
+.analytics-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--theme-color), var(--surface) 94%);
+  }
+
+.analytics-table tbody tr:hover {
+  background: color-mix(in srgb, var(--theme-color), var(--surface) 88%);
 }
 
 @media (max-width: 600px) {
