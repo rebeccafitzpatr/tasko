@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { fetchSkills, createSkill, updateSkill, deleteSkill, updateSkillMinutes } from '../services/service'
+import { useAnalyticsStore } from './analyticsStore'
 
 export interface Skill {
   id: number
@@ -46,9 +47,17 @@ export const useSkillStore = defineStore('skill', {
       }
     },
     async deleteSkill(id: number) {
-      //this.skills = this.skills.filter(s => s.id !== id)
-      await deleteSkill(id);
-      this.skills = this.skills.filter(s => s.id !== id);
+      const skillIndex = this.skills.findIndex(skill => skill.id === id)
+      const deletedSkill = skillIndex === -1 ? undefined : this.skills[skillIndex]
+      if (skillIndex !== -1) this.skills.splice(skillIndex, 1)
+
+      try {
+        await deleteSkill(id)
+      } catch (e) {
+        if (deletedSkill) this.skills.splice(skillIndex, 0, deletedSkill)
+        console.error(e)
+      }
+      useAnalyticsStore().invalidate()
     },
   },
   persist: true,

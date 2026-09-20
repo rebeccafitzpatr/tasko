@@ -5,15 +5,18 @@
     <div class="analytics-summary card">
       <div class="summary-item">
         <span class="summary-label">Total tasks</span>
-        <span class="summary-value">{{ analyticsSummary.totalTasks }}</span>
+        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+        <span v-else class="summary-value">{{ analyticsStore.summary.totalTasks }}</span>
       </div>
       <div class="summary-item">
         <span class="summary-label">Total Pomodoros</span>
-        <span class="summary-value">{{ analyticsSummary.totalPomodoros }}</span>
+        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+        <span v-else class="summary-value">{{ analyticsStore.summary.totalPomodoros }}</span>
       </div>
       <div class="summary-item">
         <span class="summary-label">Total time spent</span>
-        <span class="summary-value">{{ analyticsSummary.totalMinutes }} min</span>
+        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+        <span v-else class="summary-value">{{ analyticsStore.summary.totalMinutes }} min</span>
       </div>
     </div>
     <div class="card">
@@ -48,10 +51,10 @@
           </thead>
           <tbody>
             <tr v-for="log in recentPomodoros" :key="log.completedAt + log.taskId">
-              <td>{{ getTaskName(log.taskId) }}</td>
-              <td>{{ getSkillName(log.skillId) }}</td>
-              <td>{{ log.duration }}</td>
-              <td>{{ formatDateTime(log.completedAt) }}</td>
+              <td data-label="Task">{{ getTaskName(log.taskId) }}</td>
+              <td data-label="Skill">{{ getSkillName(log.skillId) }}</td>
+              <td data-label="Duration">{{ log.duration }} min</td>
+              <td data-label="Completed">{{ formatDateTime(log.completedAt) }}</td>
             </tr>
           </tbody>
         </table>
@@ -61,24 +64,23 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
-import { fetchAnalytics, type AnalyticsSummary } from '../services/service'
+import { useAnalyticsStore } from '../stores/analyticsStore'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
 const pomodoroStore = usePomodoroStore()
-const analyticsSummary = ref<AnalyticsSummary>({ totalPomodoros: 0, totalMinutes: 0 })
+const analyticsStore = useAnalyticsStore()
 onMounted(async () => {
-  analyticsSummary.value = await fetchAnalytics()
-  taskStore.loadTasks()
-  skillStore.loadSkills()
-  pomodoroStore.loadPomodoros()
-  fetchAnalytics().then(data => {
-    analyticsSummary.value = data
-  })
+  await Promise.all([
+    analyticsStore.load(),
+    taskStore.loadTasks(),
+    skillStore.loadSkills(),
+    pomodoroStore.loadPomodoros(),
+  ])
 })
 
 const tasks = taskStore.tasks
@@ -143,107 +145,205 @@ function formatDateTime(dt: string) {
   return d.toLocaleString()
 }
 
-const recentPomodoros = pomodoroLog.slice(-10).reverse()
+const recentPomodoros = computed(() =>
+  pomodoroStore.pomodoroLog
+    .filter(log => {
+      const taskExists = log.taskId != null && taskStore.tasks.some(task => task.id === log.taskId)
+      const skillExists = log.skillId == null || skillStore.skills.some(skill => skill.id === log.skillId)
+      return taskExists && skillExists
+    })
+    .slice(-10)
+    .reverse(),
+)
 // ...existing script code...
 </script>
 
 <style scoped>
 .analytics-root {
-  max-width: 900px;
+  width: 100%;
+  min-width: 0;
   margin: 0 auto;
-  padding: 2rem 1rem;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
 }
 
 .card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-  padding: 1.5rem 2rem;
-  margin: 1.5rem 0;
   width: 100%;
-  max-width: 700px;
+  min-width: 0;
+  max-width: none;
+  margin: 0 0 1rem;
+  padding: 1rem;
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
 }
 
 .analytics-summary {
   display: flex;
-  justify-content: space-around;
-  gap: 2rem;
-  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 4px solid var(--theme-color);
+  background: color-mix(in srgb, var(--theme-color), var(--surface) 92%);
 }
+
 .summary-item {
+  min-width: 0;
+  flex: 1 1 120px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  text-align: center;
 }
+
 .summary-label {
-  color: #888;
-  font-size: 1em;
+  color: var(--text);
+  font-size: 0.9rem;
 }
+
 .summary-value {
-  font-size: 2em;
+  color: var(--theme-text);
+  font-size: 1.75rem;
   font-weight: bold;
-  color: #42b983;
 }
 
 .skill-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
-}
-.skill-card {
-  background: #f8fafc;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-  padding: 1rem 1.5rem;
-  min-width: 180px;
-  flex: 1 1 220px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-.skill-title {
-  font-weight: bold;
-  font-size: 1.1em;
-  margin-bottom: 0.5em;
-}
-.skill-metrics {
-  display: flex;
-  gap: 1.2em;
-  margin-bottom: 0.5em;
-  color: #333;
-}
-.skill-periods {
-  display: flex;
-  gap: 1.2em;
-  font-size: 0.95em;
-  color: #666;
+  width: 100%;
+  min-width: 0;
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
 }
 
-.table-responsive {
-  overflow-x: auto;
+.skill-card {
+  min-width: 0;
+  flex: 1 1 180px;
+  padding: 1rem;
+  background: var(--surface-muted);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
 }
+
+.skill-title {
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+}
+
+.skill-metrics,
+.skill-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.skill-metrics {
+  margin-bottom: 0.5rem;
+  padding: 0px 6px;
+  color: var(--text-strong);
+  font-size: 0.7rem;
+  justify-content:space-between;
+}
+
+.skill-periods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  width: 100%;
+  color: var(--text);
+  font-size: 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.skill-periods span {
+  min-width: 0;
+  padding: 0.6rem 0.45rem;
+  text-align: center;
+  border-right: 1px solid var(--border);
+}
+
+.skill-periods span:last-child {
+  border-right: 0;
+}
+
 .analytics-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  margin-top: 1em;
 }
-.analytics-table th, .analytics-table td {
-  padding: 0.6em 1em;
-  border-bottom: 1px solid #eee;
+
+.analytics-table th,
+.analytics-table td {
+  overflow-wrap: anywhere;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
   text-align: left;
 }
+
 .analytics-table th {
-  background: #f3f3f3;
-  color: #333;
-  font-weight: 600;
+  color: var(--text-on-accent);
+  background: var(--theme-color);
 }
-.analytics-table tr:last-child td {
-  border-bottom: none;
+
+.analytics-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--theme-color), var(--surface) 94%);
+  }
+
+.analytics-table tbody tr:hover {
+  background: color-mix(in srgb, var(--theme-color), var(--surface) 88%);
+}
+
+@media (max-width: 600px) {
+  .table-responsive {
+    overflow: visible;
+  }
+
+  .analytics-table,
+  .analytics-table tbody,
+  .analytics-table tr,
+  .analytics-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .analytics-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .analytics-table tr {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .analytics-table td {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.45rem 0.6rem;
+    border-bottom: 0;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .analytics-table td::before {
+    color: var(--text-strong);
+    font-weight: 600;
+    content: attr(data-label);
+  }
+
+  .skill-periods span {
+    font-size: 0.8rem;
+  }
 }
 </style>

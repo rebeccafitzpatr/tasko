@@ -21,12 +21,12 @@
       :transform="`rotate(-90 ${size/2} ${size/2})`"
     />
     <foreignObject
-      :x="size * 0.15"
-      :y="size * 0.32"
-      :width="size * 0.7"
-      :height="size * 0.36"
+      x="0"
+      y="0"
+      :width="size"
+      :height="size"
     >
-    <div class="timer-center-content" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+    <div class="timer-center-content">
         <slot>
         <span class="timer-text">{{ displayTime }}</span>
         </slot>
@@ -66,18 +66,28 @@ const displayTime = computed(() => {
 <style scoped>
 .timer-circle {
   display: block;
+  overflow: visible;
 }
 .timer-bg {
-  stroke: #eee;
+  stroke: color-mix(in srgb, var(--theme-color), transparent 82%);
 }
 .timer-fg {
-  stroke: #42b983;
-  transition: stroke-dashoffset 0.5s linear;
+  stroke: var(--theme-color);
+  filter: drop-shadow(0 3px 5px color-mix(in srgb, var(--theme-color), transparent 72%));
+  transition: stroke-dashoffset 0.5s linear, stroke 0.2s ease;
 }
 .timer-text {
   font-size: 1.4em;
-  fill: #333;
-  font-family: monospace;
+  fill: var(--text-strong);
+  font-family: var(--mono);
   dominant-baseline: middle;
+}
+.timer-center-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  
 }
 </style>

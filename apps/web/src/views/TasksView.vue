@@ -2,21 +2,31 @@
 <template>
   <div>
     <h1>Tasks</h1>
-    <form @submit.prevent="addTask">
-      <input v-model="newTask.name" placeholder="Task name" required />
-      <select v-model="newTask.skillId" required>
-        <option value="" disabled>Select skill</option>
-        <option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skill.name }}</option>
-      </select>
-      <button type="submit">Add Task</button>
-    </form>
+    <div class="task-form">
+      <form @submit.prevent="addTask" class="details">
+        <input v-model="newTask.name" placeholder="Task name" required />
+        <CustomSelect
+          v-model="newTask.skillId"
+          placeholder="Select skill"
+          :options="
+            skills.map(skill => ({
+              value: skill.id,
+              label: skill.name,
+            }))
+          "
+          @update:modelValue="clearSkillError"
+        />
+        <button type="submit">Add Task</button>
+      </form>
+      <p v-if="skillError" class="form-error" role="alert">{{ skillError }}</p>
+    </div>
 
     <div class="tasks-list">
       <ul>
         <li v-for="task in tasks" :key="task.id">
           <div class="task-item">
             {{ task.name }} ({{ getSkillName(task.skillId) }})
-            <button @click="deleteTask(task.id)">Delete</button>
+            <button class="delete-button" @click="deleteTask(task.id)">Delete</button>
           </div>
         </li>
       </ul>
@@ -28,24 +38,33 @@
 import { ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
+import CustomSelect from '../components/CustomSelect.vue'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
 
 const tasks = taskStore.tasks
 const skills = skillStore.skills
+const skillError = ref('')
 
 const newTask = ref({
   id: 0,
   name: '',
-  skillId: 0,
+  skillId: null as number | null,
   start: '',
   end: '',
   date: '',
 })
 
 function addTask() {
-  if (!newTask.value.name || !newTask.value.skillId) return
+  if (!newTask.value.name || !newTask.value.skillId) {
+    if (!newTask.value.skillId) {
+      skillError.value = 'Choose a skill before adding this task.'
+    }
+    return
+  }
+
+  skillError.value = ''
   const now = new Date()
   taskStore.addTask({
     ...newTask.value,
@@ -55,7 +74,11 @@ function addTask() {
     date: now.toISOString().split('T')[0],
   })
   newTask.value.name = ''
-  newTask.value.skillId = 0
+  newTask.value.skillId = null
+}
+
+function clearSkillError() {
+  skillError.value = ''
 }
 
 function deleteTask(id: number) {
@@ -70,8 +93,24 @@ function getSkillName(skillId: number | null | undefined) {
 
 <style>
 
+.task-form {
+  width: 100%;
+}
+
+.form-error {
+  width: 100%;
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.8rem;
+  color: var(--theme-text);
+  font-size: 0.85rem;
+  text-align: left;
+  background: color-mix(in srgb, var(--theme-color), transparent 88%);
+  border-left: 3px solid var(--theme-color);
+  border-radius: 4px;
+}
+
 .tasks-list {
-  background-color: #e8e8e8;
+  background-color: var(--theme-light);
   padding: 1.5rem 2rem;
   margin: 1rem;
   border-radius: 12px;
@@ -84,8 +123,8 @@ function getSkillName(skillId: number | null | undefined) {
 .task-item {
   padding: 1rem;
   margin: 1rem;
-  border: 1px solid #e2e2e2;
-  background-color:#eee;
+  border: 1px solid var(--theme-medium);
+  background-color: var(--bg);
   border-radius: 8px;
 
 }
