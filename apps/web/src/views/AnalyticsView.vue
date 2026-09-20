@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
