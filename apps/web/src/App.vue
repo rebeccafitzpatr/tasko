@@ -70,27 +70,4 @@ nav a {
   color: var(--text-on-accent);
 }
 
-/* Center all page content */
-.centered-container {
-  width: min(100% - 2rem, 700px);
-  min-height: 80vh;
-  margin: 0 auto;
-  padding: 2rem;
-  box-sizing: border-box;
-
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: stretch;
-
-  text-align: center;
-  background: var(--surface);
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
-}
-
-.centered-container nav,
-.centered-container > .router-view {
-  width: 100%;
-}
 </style>
