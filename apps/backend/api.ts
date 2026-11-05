@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { db } from './db.js' // uses the db.ts export
-// import type { Skill, Task, PomodoroLog } from '../types' // optional
+import { validateCreateSessionInput } from './sessionRules.js'
 
 const router = Router();
 
@@ -115,18 +115,78 @@ router.delete('/tasks/:id', async (req, res) => {
 // Pomodoro Logs
 
 router.post('/pomodoros', async (req, res) => {
-  const { taskId, skillId, duration } = req.body
-  const minutes = Number(duration) || 25
+  const validation = validateCreateSessionInput(req.body)
+  if ('error' in validation) {
+    return res.status(400).json({ error: validation.error })
+  }
+
+  const { taskId, skillId: requestedSkillId, duration, type } = validation.value
   try {
-    // Update task's counters
-    await db`UPDATE tasks
-      SET completed_pomodoros = COALESCE(completed_pomodoros, 0) + 1,
-          minutes_spent = COALESCE(minutes_spent, 0) + ${minutes}
-      WHERE id = ${taskId}`
-    // Insert log
-    await db`INSERT INTO pomodoro_logs (task_id, skill_id, duration_minutes, completed_at) 
-      VALUES (${taskId}, ${skillId ?? null}, ${minutes}, NOW())`
-    res.status(201).json({ taskId, duration: minutes })
+    let taskName: string | null = null
+    let skillName: string | null = null
+    let canonicalSkillId = requestedSkillId
+
+    if (taskId !== null) {
+      const tasks = await db`
+        SELECT t.id, t.name AS taskName, t.skill_id AS skillId, s.name AS skillName
+        FROM tasks t
+        LEFT JOIN skills s ON s.id = t.skill_id
+        WHERE t.id = ${taskId}
+      `
+      if (tasks.length === 0) {
+        return res.status(404).json({ error: 'Task not found.' })
+      }
+
+      const task = tasks[0]
+      const taskSkillId = task.skillId == null ? null : Number(task.skillId)
+      if (requestedSkillId !== null && requestedSkillId !== taskSkillId) {
+        return res.status(400).json({ error: 'skillId must match the selected task.' })
+      }
+      taskName = task.taskName
+      skillName = task.skillName ?? null
+      canonicalSkillId = taskSkillId
+    } else if (requestedSkillId !== null) {
+      const skills = await db`SELECT id, name FROM skills WHERE id = ${requestedSkillId}`
+      if (skills.length === 0) {
+        return res.status(404).json({ error: 'Skill not found.' })
+      }
+      skillName = skills[0].name
+    }
+
+    const completedAt = type === 'timer'
+      ? new Date()
+      : new Date(validation.value.completedAt as string)
+    const completedAtUtc = completedAt.toISOString().slice(0, 19).replace('T', ' ')
+    const session = await db.begin(async (transaction) => {
+      await transaction`
+        INSERT INTO pomodoro_logs
+          (task_id, skill_id, task_name_snapshot, skill_name_snapshot,
+           duration_minutes, completed_at, completed_at_is_utc, type)
+        VALUES
+          (${taskId}, ${canonicalSkillId}, ${taskName}, ${skillName},
+           ${duration}, ${completedAtUtc}, TRUE, ${type})
+      `
+      if (taskId !== null) {
+        await transaction`
+          UPDATE tasks
+          SET completed_pomodoros = COALESCE(completed_pomodoros, 0) + 1,
+              minutes_spent = COALESCE(minutes_spent, 0) + ${duration}
+          WHERE id = ${taskId}
+        `
+      }
+      const rows = await transaction`SELECT LAST_INSERT_ID() AS id`
+      return rows[0]
+    })
+    res.status(201).json({
+      id: session.id,
+      taskId,
+      skillId: canonicalSkillId,
+      taskName,
+      skillName,
+      duration,
+      completedAt: completedAt.toISOString(),
+      type,
+    })
   } catch (e) {
     res.status(500).json({ error: (e as Error).message })
   }
@@ -135,9 +195,22 @@ router.post('/pomodoros', async (req, res) => {
 router.get('/pomodoros', async (_req, res) => {
   try {
     const logs = await db`
-      SELECT id, task_id AS taskId, skill_id AS skillId, duration_minutes AS duration, completed_at AS completedAt, type
-      FROM pomodoro_logs
-      ORDER BY completedAt DESC
+      SELECT
+        pl.id,
+        pl.task_id AS taskId,
+        pl.skill_id AS skillId,
+        COALESCE(pl.task_name_snapshot, t.name) AS taskName,
+        COALESCE(pl.skill_name_snapshot, s.name) AS skillName,
+        pl.duration_minutes AS duration,
+        CASE
+          WHEN pl.completed_at_is_utc THEN DATE_FORMAT(pl.completed_at, '%Y-%m-%dT%H:%i:%sZ')
+          ELSE DATE_FORMAT(pl.completed_at, '%Y-%m-%d %H:%i:%s')
+        END AS completedAt,
+        pl.type
+      FROM pomodoro_logs pl
+      LEFT JOIN tasks t ON t.id = pl.task_id
+      LEFT JOIN skills s ON s.id = pl.skill_id
+      ORDER BY pl.completed_at DESC, pl.id DESC
       LIMIT 100
     `
     res.json(logs)
@@ -148,20 +221,11 @@ router.get('/pomodoros', async (_req, res) => {
 
 router.get('/analytics/summary', async (_req, res) => {
   try {
-    // Only count sessions whose task and skill still exist.
     const totalPomodoros = (await db`
-      SELECT COUNT(*) AS c
-      FROM pomodoro_logs pl
-      INNER JOIN tasks t ON t.id = pl.task_id
-      LEFT JOIN skills s ON s.id = pl.skill_id
-      WHERE pl.skill_id IS NULL OR s.id IS NOT NULL
+      SELECT COUNT(*) AS c FROM pomodoro_logs
     `)[0]?.c ?? 0;
     const totalMinutes = (await db`
-      SELECT COALESCE(SUM(pl.duration_minutes), 0) AS m
-      FROM pomodoro_logs pl
-      INNER JOIN tasks t ON t.id = pl.task_id
-      LEFT JOIN skills s ON s.id = pl.skill_id
-      WHERE pl.skill_id IS NULL OR s.id IS NOT NULL
+      SELECT COALESCE(SUM(duration_minutes), 0) AS m FROM pomodoro_logs
     `)[0]?.m ?? 0;
     const totalTasks = (await db`SELECT COUNT(*) AS c FROM tasks`)[0]?.c ?? 0;
 

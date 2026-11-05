@@ -19,10 +19,14 @@ export interface Task {
 }
 
 export interface PomodoroLogEntry {
-  taskId: number
+  id?: number
+  taskId: number | null
   skillId?: number | null
+  taskName?: string | null
+  skillName?: string | null
   duration: number // in minutes
   completedAt: string // ISO date string
+  type?: 'timer' | 'manual'
 }
 
 
@@ -68,7 +72,7 @@ export const useTaskStore = defineStore('task', {
     async incrementPomodoro(taskId: number, minutes: number) {
       try {
         const task = this.tasks.find(t => t.id === taskId);
-        await addPomodoro(taskId, minutes, task?.skillId ?? null);
+        const session = await addPomodoro(taskId, minutes, task?.skillId ?? null);
 
         // Update local state optimistically (or rely on re-fetch)
         if (task) {
@@ -81,17 +85,11 @@ export const useTaskStore = defineStore('task', {
             console.log(`Updated skill ${skill.name}: spent ${skill.minutesSpent} minutes`);
           }
 
-          this.pomodoroLog.push({
-            taskId: taskId,
-            skillId: task.skillId ?? null,
-            duration: minutes,
-            completedAt: new Date().toISOString(),
-          });
+          this.pomodoroLog.push(session);
         }
       } catch (e) {
-        console.error(e);
-        // Optional: refresh to reconcile state with backend
         await this.loadTasks();
+        throw e;
       }
     },
   },

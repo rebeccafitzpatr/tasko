@@ -18,12 +18,13 @@ export type Task = {
 
 export type PomodoroLog = {
   id?: number;
-  taskId?: number | null;
-  skillId?: number | null;
+  taskId: number | null;
+  skillId: number | null;
+  taskName: string | null;
+  skillName: string | null;
   duration: number;
-  durationMinutes: number;
   completedAt: string;
-  type?: string;
+  type: 'timer' | 'manual';
 };
 
 export type AnalyticsSummary = {
@@ -109,13 +110,13 @@ export async function deleteTask(id: number): Promise<void> {
 }
 
 // Pomodoro logs
-export async function addPomodoro(taskId: number, duration: number, skillId?: number | null): Promise<{ taskId: number; duration: number }> {
+export async function addPomodoro(taskId: number, duration: number, skillId?: number | null): Promise<PomodoroLog> {
   const res = await fetch(`${API_BASE}/pomodoros`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ taskId, duration, skillId }),
+    body: JSON.stringify({ taskId, duration, skillId, type: 'timer' }),
   });
-  return handleResponse<{ taskId: number; duration: number }>(res);
+  return handleResponse<PomodoroLog>(res);
 }
 export async function fetchPomodoros(): Promise<PomodoroLog[]> {
   const res = await fetch(`${API_BASE}/pomodoros`);

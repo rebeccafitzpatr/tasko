@@ -57,6 +57,9 @@
         </label>
 
         <p v-if="startError" class="start-error" role="alert">{{ startError }}</p>
+        <p v-if="pomodoroStore.completionError" class="start-error" role="alert">
+          Could not save session: {{ pomodoroStore.completionError }}
+        </p>
         <div class="timer-controls">
           <button @click="start" :disabled="isRunning">Start</button>
           <button @click="pause" :disabled="!isRunning">Pause</button>
