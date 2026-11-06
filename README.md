@@ -8,6 +8,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 
 - create new tasks and complete pomodoro sessions towards those tasks
 - assign tasks to skills, so all pomodoro session times go towards skills
+- create standalone skills or one-level sub-skills, assign either to tasks, and retain recorded skill paths after moves/deletions
 - get a deep dive into your stats and analytics !
 - add manual study sessions and edit recorded sessions from Analytics, with optional task/skill assignments
 - browse paginated session history and filter by inclusive UTC dates; analytics aggregate all matching sessions, not just the displayed page
@@ -30,6 +31,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 - Session logs are the source of truth for time analytics; task and skill minute totals are compatibility counters.
 - Session validation, timestamp rules, deletion snapshots, and migration steps are documented in [migrations/session-history.md](./migrations/session-history.md).
 - Timer recovery and retry-safe completion require [20261106_timer_completion.sql](./migrations/20261106_timer_completion.sql) after the session-history migration, before deploying the updated app.
+- Skill hierarchy requires [20261106_skill_hierarchy.sql](./migrations/20261106_skill_hierarchy.sql) after both earlier migrations, before deploying the updated API/client. Existing skills remain standalone.
 
 ### Stores
 

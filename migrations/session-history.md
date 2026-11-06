@@ -1,5 +1,47 @@
 # Session history rules
 
+## Optional skill hierarchy
+
+Apply `20261106_skill_hierarchy.sql` once after `20261105_session_history.sql` and
+`20261106_timer_completion.sql`, before deploying the updated API and client.
+Back up the database first: MySQL DDL is not rollback-safe. Fresh databases use
+`create_tables.sql` instead of applying these incremental migrations.
+
+`skills.parent_id` is nullable and references another skill with `ON DELETE RESTRICT`.
+Existing skills start standalone; IDs, task assignments, counters, and session logs
+are not replaced or reassigned. Skill names remain globally unique.
+
+`POST /api/skills` accepts `{ name, parentId }`; omitted or null parents create
+standalone/top-level skills. `GET /api/skills` returns `parentId` and `parentName`.
+`PUT /api/skills/:id` supports renaming, moving a leaf to another top-level parent,
+or promoting it with `parentId: null`; omitted parents keep the existing relationship.
+Self-parenting, missing parents, grandchildren, and moving a parent that still has
+children are rejected. Mutations lock skills while checking these rules.
+`DELETE /api/skills/:id` returns 409 until all sub-skills are moved, promoted, or
+deleted. Deleting a leaf still nulls task/session skill foreign keys without
+deleting tasks or history.
+
+Skills displays grouped parents and sub-skills with create, rename, move, promote,
+and delete controls. Tasks can be assigned to a top-level skill or a sub-skill;
+selectors display `Parent / Sub-skill` for clarity.
+
+New timer and manual sessions save `parent_skill_id_snapshot`,
+`parent_skill_name_snapshot`, and `skill_path_snapshot` alongside the assigned
+skill. Parent snapshots have no foreign keys. Moves, promotions, renames, and
+deletions do not rewrite historical paths; duration/date-only corrections and
+timer retries preserve them. Reassigning a session captures its new current path.
+Existing logs get their available saved/current standalone skill name as their
+path; a historical parent cannot be inferred and is not invented.
+
+History displays the saved path even after deletion. Skill summaries include
+directly assigned sessions plus those originally recorded beneath that parent.
+A moved sub-skill's old sessions stay under the original parent; new sessions
+report under the new parent. Parent rollups and sub-skill totals overlap and must
+not be added together; overall totals count each session once. Deleted skills
+no longer have a current summary card, but their sessions remain in history and
+overall totals. Compatibility skill counters continue to count direct assignments
+only and are not backfilled for hierarchy; analytics uses session aggregates.
+
 ## Canonical session record
 
 `pomodoro_logs` is the source of truth for study history and time-based analytics. Each record requires a positive whole-minute `duration_minutes`, a `type` of `timer` or `manual`, and a `completed_at` timestamp. Timer sessions must reference a task. Manual sessions may reference a task and/or skill, or be unassigned. If a task is supplied, its current skill is authoritative; a conflicting skill ID is rejected.

@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import express from 'express'
 import { SQL } from 'bun'
-import type { PomodoroLog } from './types.js'
+import type { PomodoroLog, Skill } from './types.js'
 
 interface StoredSession extends PomodoroLog {
   completionId: string | null
@@ -21,6 +21,17 @@ let releaseLookups: (() => void) | null = null
 let lookupCount = 0
 let failUpdate = false
 let failHistory = false
+let hierarchySkills = [
+  { id: 4, name: 'English', parentId: null as number | null, minutesSpent: 0 },
+]
+let storedTaskSkillId: number | null = 4
+
+function skillDetails(id: number) {
+  const skill = hierarchySkills.find(item => item.id === id)
+  if (!skill) return null
+  const parent = hierarchySkills.find(item => item.id === skill.parentId)
+  return { ...skill, parentName: parent?.name ?? null, parentSkillId: parent?.id ?? null, parentSkillName: parent?.name ?? null }
+}
 
 function inRange(session: StoredSession, start: unknown, end: unknown) {
   const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
@@ -37,7 +48,8 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
   if (sql.includes('SELECT COUNT(*) AS c FROM tasks')) return [{ c: taskExists ? 1 : 0 }]
   if (sql.includes('GROUP BY s.id, s.name')) {
     const associated = [...sessions.values()].filter(session =>
-      session.skillId === 4 && inRange(session, values[6], values[8]))
+      (session.skillId === 4 || session.parentSkillId === 4) && inRange(session, values[6], values[8]))
+    expect(sql).toContain('OR pl.parent_skill_id_snapshot = s.id')
     const periodTotal = (start: unknown, end: unknown) => associated
       .filter(session => {
         const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
@@ -83,10 +95,47 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
     return session ? [session] : []
   }
   if (sql.includes('FROM tasks t')) {
-    return taskExists ? [{ id: Number(values[0]), taskName: 'Study', skillId: 4, skillName: 'English' }] : []
+    const skill = skillDetails(storedTaskSkillId ?? 0)
+    return taskExists ? [{
+      id: Number(values[0]), taskName: 'Study', skillId: storedTaskSkillId, skillName: skill?.name ?? null,
+      parentSkillId: skill?.parentSkillId ?? null, parentSkillName: skill?.parentSkillName ?? null,
+    }] : []
   }
-  if (sql.includes('SELECT id, name FROM skills')) {
-    return [{ id: Number(values[0]), name: 'English' }]
+  if (sql.includes('SELECT id, name, parent_id AS parentId FROM skills')) {
+    return hierarchySkills.map(skill => ({ ...skill }))
+  }
+  if (sql.includes('FROM skills s LEFT JOIN skills p')) {
+    const skills = values.length ? [skillDetails(Number(values[0]))] : hierarchySkills.map(skill => skillDetails(skill.id))
+    return skills.filter(skill => skill !== null)
+  }
+  if (sql.includes('INSERT INTO skills')) {
+    if (hierarchySkills.some(skill => skill.name === values[0])) {
+      throw new SQL.MySQLError('Duplicate skill', { code: 'ER_DUP_ENTRY', errno: 1062, sqlState: '23000' })
+    }
+    latestId = Math.max(0, ...hierarchySkills.map(skill => skill.id)) + 1
+    hierarchySkills.push({ id: latestId, name: String(values[0]), parentId: values[1] == null ? null : Number(values[1]), minutesSpent: 0 })
+    return []
+  }
+  if (sql.includes('UPDATE skills SET name')) {
+    const skill = hierarchySkills.find(skill => skill.id === Number(values[2]))
+    if (!skill) throw new Error('Test skill missing')
+    Object.assign(skill, { name: String(values[0]), parentId: values[1] == null ? null : Number(values[1]) })
+    return []
+  }
+  if (sql.includes('DELETE FROM skills')) {
+    const id = Number(values[0])
+    hierarchySkills = hierarchySkills.filter(skill => skill.id !== id)
+    if (storedTaskSkillId === id) storedTaskSkillId = null
+    for (const session of sessions.values()) if (session.skillId === id) session.skillId = null
+    return []
+  }
+  if (sql.includes('INSERT INTO tasks')) {
+    latestId = 12
+    storedTaskSkillId = values[1] == null ? null : Number(values[1])
+    return []
+  }
+  if (sql.includes('SELECT id FROM tasks')) {
+    return taskExists ? [{ id: 12 }] : []
   }
   if (sql.includes('FROM pomodoro_logs WHERE id')) {
     const session = [...sessions.values()].find(value => value.id === Number(values[0]))
@@ -94,13 +143,16 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
   }
   if (sql.includes('UPDATE pomodoro_logs')) {
     if (failUpdate) throw new Error('Database unavailable')
-    const session = [...sessions.values()].find(value => value.id === Number(values[6]))
+    const session = [...sessions.values()].find(value => value.id === Number(values[9]))
     if (!session) throw new Error('Test session missing')
     Object.assign(session, {
       taskId: values[0] == null ? null : Number(values[0]),
       skillId: values[1] == null ? null : Number(values[1]),
       taskName: values[2], skillName: values[3], duration: Number(values[4]),
       completedAt: String(values[5]).replace(' ', 'T') + 'Z',
+      parentSkillId: values[6] == null ? null : Number(values[6]),
+      parentSkillName: values[7] == null ? null : String(values[7]),
+      skillPath: values[8] == null ? null : String(values[8]),
     })
     return []
   }
@@ -125,10 +177,14 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
       type: values[6] === 'manual' ? 'manual' : 'timer',
       completionId,
       completionRequest: values[8] == null ? null : String(values[8]),
+      parentSkillId: values[9] == null ? null : Number(values[9]),
+      parentSkillName: values[10] == null ? null : String(values[10]),
+      skillPath: values[11] == null ? null : String(values[11]),
     })
     return []
   }
   if (sql.includes('UPDATE tasks')) {
+    if (sql.includes('SET name')) storedTaskSkillId = values[1] == null ? null : Number(values[1])
     taskUpdates++
     return []
   }
@@ -185,6 +241,8 @@ beforeEach(() => {
   lookupBarrier = null
   releaseLookups = null
   lookupCount = 0
+  hierarchySkills = [{ id: 4, name: 'English', parentId: null, minutesSpent: 0 }]
+  storedTaskSkillId = 4
 })
 
 function put(id: number | string, body: unknown) {
@@ -193,6 +251,115 @@ function put(id: number | string, body: unknown) {
     body: JSON.stringify(body),
   })
 }
+
+function skillRequest(path = '', method = 'GET', body?: unknown) {
+  return fetch(`${url.replace('/pomodoros', '/skills')}${path}`, {
+    method, headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+}
+
+describe('skill hierarchy HTTP behavior and historical assignments', () => {
+  test('creates standalone and child skills and reads the relationship', async () => {
+    const parent = await skillRequest('', 'POST', { name: 'Programming' })
+    expect(parent.status).toBe(201)
+    const { id } = await parent.json() as Skill
+    const child = await skillRequest('', 'POST', { name: 'TypeScript', parentId: id })
+    expect(child.status).toBe(201)
+    expect(await child.json()).toMatchObject({ parentId: id, parentName: 'Programming' })
+    expect(await (await skillRequest()).json()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'English', parentId: null }),
+      expect.objectContaining({ name: 'TypeScript', parentId: id }),
+    ]))
+  })
+
+  test('rejects invalid parents, nesting, self-parenting and moving a parent with children', async () => {
+    const child = await (await skillRequest('', 'POST', { name: 'Grammar', parentId: 4 })).json() as Skill
+    for (const parentId of [0, '4', 999]) {
+      expect((await skillRequest('', 'POST', { name: 'Invalid', parentId })).status).toBe(400)
+    }
+    expect((await skillRequest('', 'POST', { name: 'Nested', parentId: child.id })).status).toBe(400)
+    expect((await skillRequest('/4', 'PUT', { parentId: 4 })).status).toBe(400)
+    await skillRequest('', 'POST', { name: 'Other' })
+    expect((await skillRequest('/4', 'PUT', { parentId: child.id + 1 })).status).toBe(400)
+    expect((await skillRequest('', 'POST', { name: 'English' })).status).toBe(409)
+    expect((await skillRequest('/999', 'PUT', { name: 'Missing' })).status).toBe(404)
+  })
+
+  test('blocks parent deletion until children are moved or promoted', async () => {
+    const child = await (await skillRequest('', 'POST', { name: 'Grammar', parentId: 4 })).json() as Skill
+    const blocked = await skillRequest('/4', 'DELETE')
+    expect(blocked.status).toBe(409)
+    expect((await blocked.json() as { error: string }).error).toContain('sub-skills')
+    expect((await skillRequest(`/${child.id}`, 'PUT', { parentId: null })).status).toBe(200)
+    expect((await skillRequest('/4', 'DELETE')).status).toBe(204)
+    expect(skillDetails(child.id)?.parentId).toBeNull()
+  })
+
+  test('snapshots parent paths for timer and manual sessions, preserves edits and retries after deletion', async () => {
+    const child = await (await skillRequest('', 'POST', { name: 'Grammar', parentId: 4 })).json() as Skill
+    storedTaskSkillId = child.id
+    const timer = await post()
+    expect(timer.status).toBe(201)
+    expect(await timer.json()).toMatchObject({ skillPath: 'English / Grammar', parentSkillId: 4 })
+    const manual = await post({ type: 'manual', taskId: null, skillId: child.id, duration: 10, completedAt: '2026-01-01T12:00:00Z' })
+    expect(await manual.json()).toMatchObject({ skillPath: 'English / Grammar', parentSkillName: 'English' })
+    await skillRequest(`/${child.id}`, 'PUT', { parentId: null })
+    await skillRequest('/4', 'PUT', { name: 'Renamed' })
+    const edited = await put(child.id + 1, { taskId: 12, skillId: child.id, duration: 40, completedAt: '2026-01-01T12:00:00Z' })
+    expect(edited.status).toBe(200)
+    expect(await edited.json()).toMatchObject({ skillPath: 'English / Grammar', parentSkillId: 4 })
+    const stats = await (await fetch(url.replace('/pomodoros', '/analytics/summary'))).json() as { breakdown: { minutes: number }[] }
+    expect(stats.breakdown[0]?.minutes).toBe(50)
+    await skillRequest(`/${child.id}`, 'DELETE')
+    await skillRequest('/4', 'DELETE')
+    const retry = await post()
+    expect(retry.status).toBe(200)
+    expect(await retry.json()).toMatchObject({ skillId: null, skillPath: 'English / Grammar' })
+    const history = await (await fetch(url)).json() as { items: PomodoroLog[] }
+    expect(history.items.every((session: PomodoroLog) => session.skillPath === 'English / Grammar')).toBe(true)
+    expect(sessions.size).toBe(2)
+  })
+
+  test('tasks accept standalone and child assignments and reject nonexistent skills', async () => {
+    const child = await (await skillRequest('', 'POST', { name: 'Grammar', parentId: 4 })).json() as Skill
+    const tasksUrl = url.replace('/pomodoros', '/tasks')
+    const create = (skillId: number) => fetch(tasksUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Study', skillId }),
+    })
+    expect((await create(4)).status).toBe(201)
+    expect(await (await create(child.id)).json()).toMatchObject({ skillId: child.id, skillPath: 'English / Grammar' })
+    expect((await create(999)).status).toBe(404)
+    const updated = await fetch(`${tasksUrl}/12`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Study', skillId: 4 }),
+    })
+    expect(updated.status).toBe(200)
+    expect(await updated.json()).toMatchObject({ skillId: 4, skillPath: 'English' })
+  })
+
+  test('moving a child keeps old paths and records new sessions under its new parent', async () => {
+    const child = await (await skillRequest('', 'POST', { name: 'Grammar', parentId: 4 })).json() as Skill
+    const parent = await (await skillRequest('', 'POST', { name: 'Languages' })).json() as Skill
+    const details = { type: 'manual', taskId: null, skillId: child.id, duration: 15, completedAt: '2026-01-01T12:00:00Z' }
+    const oldSession = await (await post(details)).json() as PomodoroLog
+    const moved = await skillRequest(`/${child.id}`, 'PUT', { parentId: parent.id })
+    expect(moved.status).toBe(200)
+    expect(await moved.json()).toMatchObject({ parentId: parent.id, parentName: 'Languages' })
+    const newSession = await (await post(details)).json() as PomodoroLog
+    expect(oldSession.skillPath).toBe('English / Grammar')
+    expect(newSession.skillPath).toBe('Languages / Grammar')
+    expect(newSession.parentSkillId).toBe(parent.id)
+    const history = await (await fetch(url)).json() as { items: PomodoroLog[] }
+    expect(history.items.map(session => session.skillPath)).toEqual(['Languages / Grammar', 'English / Grammar'])
+    if (oldSession.id === undefined) throw new Error('Created session has no ID')
+    const reassigned = await put(oldSession.id, {
+      taskId: null, skillId: 4, duration: details.duration, completedAt: details.completedAt,
+    })
+    expect(reassigned.status).toBe(200)
+    expect(await reassigned.json()).toMatchObject({ skillId: 4, skillPath: 'English', parentSkillId: null })
+  })
+})
 
 describe('manual session creation and corrections', () => {
   const details = { taskId: null, skillId: null, duration: 30, completedAt: '2026-01-01T12:00:00Z' }
@@ -236,6 +403,7 @@ describe('manual session creation and corrections', () => {
   })
 
   test('reassigns a session and reconciles old and new counters', async () => {
+    hierarchySkills.push({ id: 9, name: 'Coding', parentId: null, minutesSpent: 0 })
     await post()
     const edited = await put(1, { ...details, taskId: null, skillId: 9 })
     expect(edited.status).toBe(200)

@@ -1,12 +1,9 @@
 import { defineStore } from 'pinia'
 import { fetchSkills, createSkill, updateSkill, deleteSkill, updateSkillMinutes } from '../services/service'
 import { useAnalyticsStore } from './analyticsStore'
+import type { Skill } from '../services/service'
 
-export interface Skill {
-  id: number
-  name: string
-  minutesSpent?: number // Total minutes spent on this skill
-}
+export type { Skill } from '../services/service'
 
 export const useSkillStore = defineStore('skill', {
   state: () => ({
@@ -17,9 +14,9 @@ export const useSkillStore = defineStore('skill', {
       this.skills = await fetchSkills();
     },
     async addSkill(skill: Skill) {
-      //this.skills.push({ ...skill, minutesSpent: skill.minutesSpent ?? 0 })
-      const newSkill = await createSkill(skill.name);
+      const newSkill = await createSkill(skill.name, skill.parentId ?? null);
       this.skills.push({ ...newSkill, minutesSpent: newSkill.minutesSpent ?? 0 });
+      useAnalyticsStore().invalidate()
     },
     async incrementSkillTime(skillId: number, minutes: number) {
       const s = this.skills.find(s => s.id === skillId);
@@ -32,9 +29,10 @@ export const useSkillStore = defineStore('skill', {
       // const idx = this.skills.findIndex(s => s.id === updated.id)
       // if (idx !== -1) this.skills[idx] = updated
       if (typeof updated.name === 'string') {
-        const refreshed = await updateSkill(updated.id, updated.name);
+        const refreshed = await updateSkill(updated.id, updated.name, updated.parentId);
         const idx = this.skills.findIndex(s => s.id === updated.id);
         if (idx !== -1) this.skills[idx] = { ...this.skills[idx], ...refreshed };
+        useAnalyticsStore().invalidate()
         return;
       }
 
@@ -47,16 +45,8 @@ export const useSkillStore = defineStore('skill', {
       }
     },
     async deleteSkill(id: number) {
-      const skillIndex = this.skills.findIndex(skill => skill.id === id)
-      const deletedSkill = skillIndex === -1 ? undefined : this.skills[skillIndex]
-      if (skillIndex !== -1) this.skills.splice(skillIndex, 1)
-
-      try {
-        await deleteSkill(id)
-      } catch (e) {
-        if (deletedSkill) this.skills.splice(skillIndex, 0, deletedSkill)
-        console.error(e)
-      }
+      await deleteSkill(id)
+      this.skills = this.skills.filter(skill => skill.id !== id)
       useAnalyticsStore().invalidate()
     },
   },

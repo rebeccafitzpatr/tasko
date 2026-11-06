@@ -49,7 +49,7 @@
             :options="
               tasks.map(task => ({
                 value: task.id,
-                label: task.name,
+                label: `${task.name} (${task.skillPath ?? task.skillName ?? 'Unassigned'})`,
               }))
             "
             @update:modelValue="clearStartError"
