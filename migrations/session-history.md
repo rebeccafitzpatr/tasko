@@ -1,5 +1,30 @@
 # Session history rules
 
+## CSV history export
+
+**Export CSV** on Analytics downloads **all** sessions in the applied date range,
+regardless of the visible history page. `GET /api/pomodoros/export` accepts the
+same optional inclusive UTC `start`/`end` dates as analytics/history and runs an
+unpaginated query ordered by completion time descending, then ID descending.
+It returns CSV with an attachment filename, or HTTP 204 for no matching records.
+Invalid dates and query failures return JSON errors; the client shows an empty
+message or export error with retry rather than downloading an empty file.
+
+Columns: `completed_at`, `duration_minutes`, `session_type`, `task`, `skill`,
+`parent_skill`, `skill_path`, and `timestamp_policy`. Labels use saved snapshots,
+including deleted records, with existing current-name fallbacks. Unassigned
+labels are empty cells. UTC timestamps have `Z`; legacy timezone-unknown
+timestamps retain their stored wall time and are marked `legacy_unknown`.
+
+CSV uses UTF-8 with BOM, CRLF record separators, double-quoted fields and doubled
+embedded quotes. Commas and newlines in names stay inside quoted cells.
+Potential spreadsheet formulas (including whitespace before `=`, `+`, `-`, or
+`@`, and leading tab/newline) receive an apostrophe prefix. This intentional
+export-only transformation does not change stored names.
+The complete export currently uses server memory; very large histories may
+need streaming later. No new migration is required after the existing
+history/timer/hierarchy migrations.
+
 ## Period selection and prior comparison
 
 Analytics offers All dates, Today, Last 7/30 days, This week/month/year to date,

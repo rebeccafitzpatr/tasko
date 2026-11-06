@@ -13,8 +13,8 @@
       </label>
       <label>Start date (UTC)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
       <label>End date (UTC)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
-      <button :disabled="isRefreshing || historyLoading || editorOpen">Apply dates</button>
-      <button type="button" :disabled="isRefreshing || historyLoading || editorOpen" @click="clearRange">All dates</button>
+      <button :disabled="rangeBusy">Apply dates</button>
+      <button type="button" :disabled="rangeBusy" @click="clearRange">All dates</button>
     </form>
     <p v-if="rangeError" role="alert">{{ rangeError }}</p>
     <p>Session totals: {{ appliedRange.start || 'all history' }} to {{ appliedRange.end || 'latest' }}.
@@ -82,6 +82,11 @@
     </div>
     <div class="card">
       <h2>Session history</h2>
+      <button :disabled="rangeBusy" @click="exportSessions">{{ isExporting ? 'Exporting...' : 'Export CSV' }}</button>
+      <p>CSV exports all sessions in the applied date range, including older pages.</p>
+      <p v-if="isExporting" role="status">Exporting all matching sessions...</p>
+      <p v-if="exportMessage" role="status">{{ exportMessage }}</p>
+      <p v-if="exportError" role="alert">{{ exportError }} Retry with Export CSV.</p>
       <button :disabled="isRefreshing || historyLoading || editorOpen" @click="openEditor(null)">Add manual session</button>
       <SessionEditor v-if="editorOpen" :session="editingSession" :tasks="tasks" :skills="skills"
         @saved="sessionSaved" @cancel="editorOpen = false" />
@@ -134,9 +139,10 @@ import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useAnalyticsStore } from '../stores/analyticsStore'
 import SessionEditor from '../components/SessionEditor.vue'
-import { fetchAnalytics, type AnalyticsSummary, type PomodoroLog, type DateRange } from '../services/service'
+import { exportHistory, fetchAnalytics, type AnalyticsSummary, type PomodoroLog, type DateRange } from '../services/service'
 import { skillLabel } from '../services/skillLabels'
 import { reportPeriods, periodRange, previousRange, validateReportRange, comparisonChange, type ReportPeriod } from '../services/reportPeriods'
+import { downloadHistory } from '../services/historyDownload'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
@@ -154,7 +160,10 @@ const startDate = ref('')
 const endDate = ref('')
 const appliedRange = ref<DateRange>({})
 const selectedPeriod = ref<ReportPeriod>('all')
-const rangeBusy = computed(() => isRefreshing.value || historyLoading.value || editorOpen.value)
+const isExporting = ref(false)
+const exportError = ref('')
+const exportMessage = ref('')
+const rangeBusy = computed(() => isRefreshing.value || historyLoading.value || editorOpen.value || isExporting.value)
 const compareEnabled = ref(false)
 const comparisonLoading = ref(false)
 const comparisonError = ref('')
@@ -201,6 +210,8 @@ async function applyRange() {
     return
   }
   appliedRange.value = range
+  exportError.value = ''
+  exportMessage.value = ''
   pomodoroStore.pomodoroLog = []
   pomodoroStore.historyHasMore = false
   currentCursor.value = null
@@ -221,6 +232,27 @@ function choosePeriod() {
   startDate.value = range.start ?? ''
   endDate.value = range.end ?? ''
   return applyRange()
+}
+
+async function exportSessions() {
+  if (rangeBusy.value) return
+  isExporting.value = true
+  exportError.value = ''
+  exportMessage.value = ''
+  const range = { ...appliedRange.value }
+  try {
+    const csv = await exportHistory(range)
+    if (csv === null) {
+      exportMessage.value = 'No sessions match the selected range. No CSV file was created.'
+      return
+    }
+    downloadHistory(csv, range)
+    exportMessage.value = `CSV download started for all matching sessions: ${range.start ?? 'all history'} to ${range.end ?? 'latest'}.`
+  } catch (cause) {
+    exportError.value = cause instanceof Error ? cause.message : 'Could not export history.'
+  } finally {
+    isExporting.value = false
+  }
 }
 
 function priorSkillSummary(id: number) {

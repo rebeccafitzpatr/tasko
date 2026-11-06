@@ -176,6 +176,13 @@ export async function fetchPomodoros(options: HistoryOptions = {}): Promise<Sess
   return handleResponse<SessionPage>(res);
 }
 
+export async function exportHistory(range: DateRange = {}): Promise<Blob | null> {
+  const res = await fetch(`${API_BASE}/pomodoros/export?${rangeParams(range)}`);
+  await requireOk(res);
+  if (res.status === 204) return null;
+  return res.blob();
+}
+
 export interface SessionDetails {
   taskId: number | null;
   skillId: number | null;

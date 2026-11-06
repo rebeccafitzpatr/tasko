@@ -5,6 +5,7 @@ import { validateCreateSessionInput, validateEditSessionInput } from './sessionR
 import { parseHistoryQuery, historyCursor } from './historyQuery.js'
 import type { PomodoroLog } from './types.js'
 import { validateSkillParent, validSkillName, type SkillNode } from './skillRules.js'
+import { historyCsv, type ExportSession } from './historyCsv.js'
 
 const router = Router();
 
@@ -405,6 +406,38 @@ router.put('/pomodoros/:id', async (req, res) => {
   } catch (error) {
     res.status(error instanceof SessionRequestError ? error.status : 500)
       .json({ error: (error as Error).message })
+  }
+})
+
+router.get('/pomodoros/export', async (req, res) => {
+  const parsed = parseHistoryQuery({ start: req.query.start, end: req.query.end })
+  if ('error' in parsed) return res.status(400).json({ error: parsed.error })
+  const { start, end } = parsed.value
+  try {
+    const logs: ExportSession[] = await db`
+      SELECT pl.id, pl.task_id AS taskId, pl.skill_id AS skillId,
+        COALESCE(pl.task_name_snapshot, t.name) AS taskName,
+        COALESCE(pl.skill_name_snapshot, s.name) AS skillName,
+        pl.parent_skill_id_snapshot AS parentSkillId, pl.parent_skill_name_snapshot AS parentSkillName,
+        COALESCE(pl.skill_path_snapshot, pl.skill_name_snapshot, s.name) AS skillPath,
+        pl.duration_minutes AS duration, pl.type,
+        pl.completed_at_is_utc AS completedAtIsUtc,
+        CASE WHEN pl.completed_at_is_utc THEN DATE_FORMAT(pl.completed_at, '%Y-%m-%dT%H:%i:%sZ')
+          ELSE DATE_FORMAT(pl.completed_at, '%Y-%m-%d %H:%i:%s') END AS completedAt
+      FROM pomodoro_logs pl
+      LEFT JOIN tasks t ON t.id = pl.task_id
+      LEFT JOIN skills s ON s.id = pl.skill_id
+      WHERE (${start} IS NULL OR pl.completed_at >= ${start})
+        AND (${end} IS NULL OR pl.completed_at < ${end})
+      ORDER BY pl.completed_at DESC, pl.id DESC
+    `
+    if (logs.length === 0) return res.status(204).send()
+    const filename = `tasko-sessions_${req.query.start ?? 'all'}_${req.query.end ?? 'latest'}.csv`
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(historyCsv(logs))
+  } catch (cause) {
+    res.status(500).json({ error: (cause as Error).message })
   }
 })
 

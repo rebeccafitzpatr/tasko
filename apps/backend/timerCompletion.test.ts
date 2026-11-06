@@ -21,6 +21,7 @@ let releaseLookups: (() => void) | null = null
 let lookupCount = 0
 let failUpdate = false
 let failHistory = false
+let failExport = false
 let hierarchySkills = [
   { id: 4, name: 'English', parentId: null as number | null, minutesSpent: 0 },
 ]
@@ -89,6 +90,16 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
     return filtered.map(session => ({
       ...session, cursorTime: session.completedAt.replace('T', ' ').replace(/Z$/, ''),
     }))
+  }
+  if (sql.includes('AS completedAtIsUtc')) {
+    if (failExport) throw new Error('Export unavailable')
+    expect(sql).not.toContain('LIMIT')
+    expect(sql).toContain('ORDER BY pl.completed_at DESC, pl.id DESC')
+    expect(sql).toContain('COALESCE(pl.skill_path_snapshot')
+    return [...sessions.values()]
+      .filter(session => inRange(session, values[0], values[2]))
+      .sort((a, b) => b.completedAt.localeCompare(a.completedAt) || b.id - a.id)
+      .map(session => ({ ...session, completedAtIsUtc: session.completedAt.endsWith('Z') }))
   }
   if (sql.includes('WHERE completion_id')) {
     const session = sessions.get(String(values[0]))
@@ -247,6 +258,7 @@ beforeEach(() => {
   failInsert = false
   failUpdate = false
   failHistory = false
+  failExport = false
   lookupBarrier = null
   releaseLookups = null
   lookupCount = 0
@@ -267,6 +279,42 @@ function skillRequest(path = '', method = 'GET', body?: unknown) {
     body: body === undefined ? undefined : JSON.stringify(body),
   })
 }
+
+describe('CSV export HTTP contract', () => {
+  test('exports all matching records, saved labels and UTC/legacy timestamps independently of pagination', async () => {
+    for (let id = 1; id <= 145; id++) sessions.set(`export-${id}`, {
+      id, taskId: null, skillId: null, taskName: 'Deleted task', skillName: 'Deleted skill',
+      parentSkillName: 'Old parent', skillPath: 'Old parent / Deleted skill',
+      duration: 15, completedAt: '2026-01-31T23:59:59Z', type: id % 2 ? 'timer' : 'manual',
+      completionId: null, completionRequest: null,
+    })
+    sessions.set('outside', { ...sessions.get('export-1')!, id: 146, completedAt: '2026-02-01T00:00:00Z' })
+    sessions.set('legacy', { ...sessions.get('export-1')!, id: 147, completedAt: '2026-01-01 00:00:00' })
+    const response = await fetch(`${url}/export?start=2026-01-01&end=2026-01-31&limit=1`)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toContain('text/csv')
+    expect(response.headers.get('Content-Disposition')).toContain('tasko-sessions_2026-01-01_2026-01-31.csv')
+    const csv = await response.text()
+    expect(csv.trim().split('\r\n')).toHaveLength(147)
+    expect(csv).toContain('"2026-01-31T23:59:59Z","15","timer","Deleted task","Deleted skill","Old parent","Old parent / Deleted skill","UTC"')
+    expect(csv).toContain('"2026-01-01 00:00:00","15","timer","Deleted task","Deleted skill","Old parent","Old parent / Deleted skill","legacy_unknown"')
+    expect(csv).not.toContain('2026-02-01')
+    expect((await fetch(`${url}/export?start=2026-02-01`)).status).toBe(200)
+    expect((await fetch(`${url}/export?end=2026-01-01`)).status).toBe(200)
+  })
+  test('communicates empty results, invalid dates and query failures', async () => {
+    const empty = await fetch(`${url}/export`)
+    expect(empty.status).toBe(204)
+    expect(await empty.text()).toBe('')
+    for (const query of ['start=2026-02-29', 'start=2026-02-01&end=2026-01-01', 'start=2026-01-01&start=2026-01-02']) {
+      expect((await fetch(`${url}/export?${query}`)).status).toBe(400)
+    }
+    failExport = true
+    const response = await fetch(`${url}/export`)
+    expect(response.status).toBe(500)
+    expect(await response.json()).toEqual({ error: 'Export unavailable' })
+  })
+})
 
 describe('skill hierarchy HTTP behavior and historical assignments', () => {
   test('range summaries include every matching session and explicit parent/sub-skill rollups', async () => {
