@@ -9,6 +9,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 - create new tasks and complete pomodoro sessions towards those tasks
 - assign tasks to skills, so all pomodoro session times go towards skills
 - get a deep dive into your stats and analytics !
+- add manual study sessions and edit recorded sessions from Analytics, with optional task/skill assignments
 
 ## To be added:
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { validateCreateSessionInput } from './sessionRules.js'
+import { validateCreateSessionInput, validateEditSessionInput } from './sessionRules.js'
 
 describe('validateCreateSessionInput', () => {
   test('accepts a timer session with a task and positive whole-minute duration', () => {
@@ -19,6 +19,7 @@ describe('validateCreateSessionInput', () => {
         completionId: '00000000-0000-4000-8000-000000000001',
       },
     })
+
   })
 
   test('accepts a manual session with a zoned ISO timestamp and optional associations', () => {
@@ -50,5 +51,29 @@ describe('validateCreateSessionInput', () => {
     [{ type: 'manual', duration: 25, taskId: '1', completedAt: '2026-11-05T08:30:00Z' }, 'taskId'],
   ] as const)('rejects invalid input %j', (input, message) => {
     expect(validateCreateSessionInput(input)).toMatchObject({ error: expect.stringContaining(message) })
+  })
+})
+
+describe('validateEditSessionInput', () => {
+  const details = { taskId: null, skillId: null, duration: 30, completedAt: '2026-01-01T12:00:00Z' }
+
+  test('accepts an unassigned session correction', () => {
+    expect(validateEditSessionInput(details)).toEqual({ value: details })
+  })
+
+  test.each([
+    [{ ...details, duration: -1 }, 'duration'],
+    [{ ...details, duration: '30' }, 'duration'],
+    [{ ...details, duration: 2.5 }, 'duration'],
+    [{ ...details, completedAt: '2026-02-30T12:00:00Z' }, 'completedAt'],
+    [{ ...details, completedAt: '2026-01-01T24:00:00Z' }, 'completedAt'],
+    [{ ...details, completedAt: '2026-01-01T12:00:00' }, 'timezone'],
+    [{ ...details, completedAt: '2099-01-01T12:00:00Z' }, 'future'],
+    [{ ...details, taskId: -1 }, 'taskId'],
+    [{ ...details, skillId: '4' }, 'skillId'],
+    [{ ...details, type: 'manual' }, 'cannot be changed'],
+    [{ ...details, completionId: 'test' }, 'cannot be changed'],
+  ])('rejects invalid correction %j', (input, error) => {
+    expect(validateEditSessionInput(input)).toMatchObject({ error: expect.stringContaining(error) })
   })
 })

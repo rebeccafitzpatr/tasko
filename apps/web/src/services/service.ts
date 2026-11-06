@@ -44,8 +44,14 @@ const API_BASE = import.meta.env.VITE_API_BASE
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || 'API request failed');
+    const text = await res.text();
+    if (res.headers.get('content-type')?.includes('application/json')) {
+      const body: unknown = JSON.parse(text);
+      if (typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string') {
+        throw new Error(body.error);
+      }
+    }
+    throw new Error(text || 'API request failed');
   }
   return res.json() as Promise<T>;
 }
@@ -122,6 +128,31 @@ export async function addPomodoro(taskId: number, duration: number, completionId
 export async function fetchPomodoros(): Promise<PomodoroLog[]> {
   const res = await fetch(`${API_BASE}/pomodoros`);
   return handleResponse<PomodoroLog[]>(res);
+}
+
+export interface SessionDetails {
+  taskId: number | null;
+  skillId: number | null;
+  duration: number;
+  completedAt: string;
+}
+
+export async function createManualSession(details: SessionDetails): Promise<PomodoroLog> {
+  const res = await fetch(`${API_BASE}/pomodoros`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...details, type: 'manual' }),
+  });
+  return handleResponse<PomodoroLog>(res);
+}
+
+export async function editSession(id: number, details: SessionDetails): Promise<PomodoroLog> {
+  const res = await fetch(`${API_BASE}/pomodoros/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(details),
+  });
+  return handleResponse<PomodoroLog>(res);
 }
 
 // Analytics (optional)
