@@ -1,9 +1,57 @@
 import { Router } from 'express'
-import { SQL } from 'bun'
+import { SQL, type TransactionSQL } from 'bun'
 import { db } from './db.js' // uses the db.ts export
-import { validateCreateSessionInput } from './sessionRules.js'
+import { validateCreateSessionInput, validateEditSessionInput } from './sessionRules.js'
 
 const router = Router();
+
+class SessionRequestError extends Error {
+  constructor(public status: number, message: string) {
+    super(message)
+  }
+}
+
+async function resolveSessionAssignment(query: SQL, taskId: number | null, requestedSkillId: number | null) {
+  if (taskId !== null) {
+    const tasks = await query`
+      SELECT t.id, t.name AS taskName, t.skill_id AS skillId, s.name AS skillName
+      FROM tasks t LEFT JOIN skills s ON s.id = t.skill_id WHERE t.id = ${taskId}
+    `
+    const task = tasks[0]
+    if (!task) throw new SessionRequestError(404, 'Task not found. Choose another task or leave it unassigned.')
+    const skillId = task.skillId == null ? null : Number(task.skillId)
+    if (requestedSkillId !== null && requestedSkillId !== skillId) {
+      throw new SessionRequestError(400, 'skillId must match the selected task.')
+    }
+    return { taskName: String(task.taskName), skillName: task.skillName ?? null, skillId }
+  }
+  if (requestedSkillId !== null) {
+    const skills = await query`SELECT id, name FROM skills WHERE id = ${requestedSkillId}`
+    if (!skills[0]) throw new SessionRequestError(404, 'Skill not found. Choose another skill or leave it unassigned.')
+    return { taskName: null, skillName: String(skills[0].name), skillId: requestedSkillId }
+  }
+  return { taskName: null, skillName: null, skillId: null }
+}
+
+async function reconcileSessionCounters(transaction: TransactionSQL, taskIds: (number | null)[], skillIds: (number | null)[]) {
+  for (const taskId of new Set(taskIds)) {
+    if (taskId === null) continue
+    await transaction`
+      UPDATE tasks SET
+        completed_pomodoros = (SELECT COUNT(*) FROM pomodoro_logs WHERE task_id = ${taskId}),
+        minutes_spent = (SELECT COALESCE(SUM(duration_minutes), 0) FROM pomodoro_logs WHERE task_id = ${taskId})
+      WHERE id = ${taskId}
+    `
+  }
+  for (const skillId of new Set(skillIds)) {
+    if (skillId === null) continue
+    await transaction`
+      UPDATE skills SET
+        minutes_spent = (SELECT COALESCE(SUM(duration_minutes), 0) FROM pomodoro_logs WHERE skill_id = ${skillId})
+      WHERE id = ${skillId}
+    `
+  }
+}
 
 async function findCompletion(completionId: string) {
   const rows = await db`
@@ -146,36 +194,8 @@ router.post('/pomodoros', async (req, res) => {
         return res.status(200).json(savedSession)
       }
     }
-    let taskName: string | null = null
-    let skillName: string | null = null
-    let canonicalSkillId = requestedSkillId
-
-    if (taskId !== null) {
-      const tasks = await db`
-        SELECT t.id, t.name AS taskName, t.skill_id AS skillId, s.name AS skillName
-        FROM tasks t
-        LEFT JOIN skills s ON s.id = t.skill_id
-        WHERE t.id = ${taskId}
-      `
-      if (tasks.length === 0) {
-        return res.status(404).json({ error: 'Task not found.' })
-      }
-
-      const task = tasks[0]
-      const taskSkillId = task.skillId == null ? null : Number(task.skillId)
-      if (requestedSkillId !== null && requestedSkillId !== taskSkillId) {
-        return res.status(400).json({ error: 'skillId must match the selected task.' })
-      }
-      taskName = task.taskName
-      skillName = task.skillName ?? null
-      canonicalSkillId = taskSkillId
-    } else if (requestedSkillId !== null) {
-      const skills = await db`SELECT id, name FROM skills WHERE id = ${requestedSkillId}`
-      if (skills.length === 0) {
-        return res.status(404).json({ error: 'Skill not found.' })
-      }
-      skillName = skills[0].name
-    }
+    const { taskName, skillName, skillId: canonicalSkillId } =
+      await resolveSessionAssignment(db, taskId, requestedSkillId)
 
     const completedAt = type === 'timer'
       ? new Date()
@@ -222,6 +242,9 @@ router.post('/pomodoros', async (req, res) => {
       completionId,
     })
   } catch (e) {
+    if (e instanceof SessionRequestError) {
+      return res.status(e.status).json({ error: e.message })
+    }
     if (completionId && e instanceof SQL.MySQLError && e.errno === 1062) {
       try {
         const existing = await findCompletion(completionId)
@@ -235,6 +258,55 @@ router.post('/pomodoros', async (req, res) => {
       }
     }
     res.status(500).json({ error: (e as Error).message })
+  }
+})
+
+router.put('/pomodoros/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  if (!Number.isSafeInteger(id) || id < 1) {
+    return res.status(400).json({ error: 'Session ID must be a positive integer.' })
+  }
+  const validation = validateEditSessionInput(req.body)
+  if ('error' in validation) return res.status(400).json({ error: validation.error })
+  const { taskId, skillId, duration } = validation.value
+  const completedAt = new Date(validation.value.completedAt)
+  completedAt.setMilliseconds(0)
+  const completedAtUtc = completedAt.toISOString().slice(0, 19).replace('T', ' ')
+
+  try {
+    const session = await db.begin(async transaction => {
+      const rows = await transaction`
+        SELECT id, task_id AS taskId, skill_id AS skillId,
+               task_name_snapshot AS taskName, skill_name_snapshot AS skillName,
+               type, completion_id AS completionId
+        FROM pomodoro_logs WHERE id = ${id} FOR UPDATE
+      `
+      const previous = rows[0]
+      if (!previous) throw new SessionRequestError(404, 'Session not found. Refresh history and try again.')
+      const oldTaskId = previous.taskId == null ? null : Number(previous.taskId)
+      const oldSkillId = previous.skillId == null ? null : Number(previous.skillId)
+      // Preserve historical labels/associations for duration-only edits, even after deletion or reassignment.
+      const assignment = taskId === oldTaskId && skillId === oldSkillId
+        ? { taskName: previous.taskName, skillName: previous.skillName, skillId: oldSkillId }
+        : await resolveSessionAssignment(transaction, taskId, skillId)
+      await transaction`
+        UPDATE pomodoro_logs SET task_id = ${taskId}, skill_id = ${assignment.skillId},
+          task_name_snapshot = ${assignment.taskName}, skill_name_snapshot = ${assignment.skillName},
+          duration_minutes = ${duration}, completed_at = ${completedAtUtc}, completed_at_is_utc = TRUE
+        WHERE id = ${id}
+      `
+      await reconcileSessionCounters(transaction, [oldTaskId, taskId], [oldSkillId, assignment.skillId])
+      return {
+        id, taskId, skillId: assignment.skillId,
+        taskName: assignment.taskName, skillName: assignment.skillName,
+        duration, completedAt: completedAt.toISOString().replace('.000Z', 'Z'),
+        type: previous.type, completionId: previous.completionId,
+      }
+    })
+    res.json(session)
+  } catch (error) {
+    res.status(error instanceof SessionRequestError ? error.status : 500)
+      .json({ error: (error as Error).message })
   }
 })
 
@@ -276,7 +348,7 @@ router.get('/analytics/summary', async (_req, res) => {
     const totalTasks = (await db`SELECT COUNT(*) AS c FROM tasks`)[0]?.c ?? 0;
 
     // Optional: per-skill breakdown (if you want to surface this too)
-    const breakdown = await db`
+    const breakdown: { skillId: number; skillName: string; pomodoros: number; minutes: number }[] = await db`
       SELECT s.id AS skillId, s.name AS skillName,
              COUNT(pl.id) AS pomodoros,
              COALESCE(SUM(pl.duration_minutes), 0) AS minutes
@@ -288,7 +360,10 @@ router.get('/analytics/summary', async (_req, res) => {
     res.json({ totalPomodoros: Number(totalPomodoros),
       totalMinutes: Number(totalMinutes),
       totalTasks: Number(totalTasks),
-      breakdown: []
+      breakdown: breakdown.map(row => ({
+        skillId: Number(row.skillId), skillName: row.skillName,
+        pomodoros: Number(row.pomodoros), minutes: Number(row.minutes),
+      }))
     });
   } catch (e) {
     res.status(500).json({ error: (e as Error).message })

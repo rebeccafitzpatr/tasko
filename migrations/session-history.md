@@ -35,3 +35,15 @@ An active timer's countdown is calculated from its deadline, not the number of i
 Before POSTing a completion, the client must successfully persist the pending record. The API requires its UUID and atomically inserts the session and updates task/skill compatibility counters. Repeated or concurrent requests with the same UUID return the existing session without another insert or counter increment. Reusing the UUID with a different task or duration returns HTTP 409. A retry still returns the original session after its task has been deleted.
 
 Failures to save locally or on the API are displayed in the timer view. Pending completions retain their UUID across reloads so a lost HTTP response can be retried safely. A reporting refresh failure is shown separately as "Session saved" and does not trigger another completion request. Timer recovery requires browser storage; clearing it removes local progress. This does not implement cross-device recovery.
+
+## Manual entry and session corrections
+
+On Analytics, choose **Add manual session**, or **Edit** beside a recorded session. Enter a positive whole-minute duration and a completion date/time in your local timezone, no later than now. Leave both assignments empty for an unassigned entry, choose a skill alone, or select a task (its skill is used). The form converts the local time to a timezone-qualified ISO timestamp; the server validates and stores UTC.
+
+`POST /api/pomodoros` accepts manual entries with `type: "manual"`, `duration`, `completedAt`, and nullable `taskId`/`skillId`. Manual entries have no timer completion identity. `PUT /api/pomodoros/:id` accepts the same editable fields, but not `type` or `completionId`: editing preserves the original record type and timer retry fingerprint.
+
+Corrections lock the existing session and update it and affected task/skill compatibility counters in a transaction. These affected counters are recalculated from session logs, not incremented again. Unchanged assignments preserve historical labels, including names whose related records have been deleted; changed assignments capture the selected records' current labels. Deleted names cannot be selected as new assignments.
+
+Successful saves refresh history, overall totals, and skill summaries. Errors preserve the form so the user can correct input or retry. Reporting refresh failures are shown separately from save failures, with a Retry loading button; they do not resubmit a saved session. History currently displays up to the latest 100 records; all-time summary and skill totals aggregate all records, while the existing daily/weekly/yearly skill figures use the loaded history.
+
+No additional schema migration is needed for manual entry/editing after both earlier session-history and timer-completion migrations have been applied.

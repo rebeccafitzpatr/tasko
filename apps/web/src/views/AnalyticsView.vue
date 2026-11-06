@@ -2,6 +2,9 @@
 <template>
   <div class="analytics-root">
     <h1>Analytics</h1>
+    <p v-if="loadError" role="alert">{{ loadError }}</p>
+    <button v-if="loadError" @click="loadData(true)">Retry loading</button>
+    <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
     <div class="analytics-summary card">
       <div class="summary-item">
         <span class="summary-label">Total tasks</span>
@@ -38,7 +41,11 @@
       </ul>
     </div>
     <div class="card">
-      <h2>Recent Pomodoro Sessions</h2>
+      <h2>Session history</h2>
+      <button :disabled="isRefreshing || editorOpen" @click="openEditor(null)">Add manual session</button>
+      <SessionEditor v-if="editorOpen" :session="editingSession" :tasks="tasks" :skills="skills"
+        @saved="sessionSaved" @cancel="editorOpen = false" />
+      <p>Showing the latest {{ recentPomodoros.length }} sessions (up to 100).</p>
       <div class="table-responsive">
         <table class="analytics-table">
           <thead>
@@ -47,6 +54,8 @@
               <th>Skill</th>
               <th>Duration (min)</th>
               <th>Completed At</th>
+              <th>Type</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -55,6 +64,10 @@
               <td data-label="Skill">{{ log.skillName ?? getSkillName(log.skillId) }}</td>
               <td data-label="Duration">{{ log.duration }} min</td>
               <td data-label="Completed">{{ formatDateTime(log.completedAt) }}</td>
+              <td data-label="Type">{{ log.type }}</td>
+              <td data-label="Actions">
+                <button :disabled="isRefreshing || editorOpen || log.id == null" @click="openEditor(log)">Edit</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -64,47 +77,85 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useAnalyticsStore } from '../stores/analyticsStore'
+import SessionEditor from '../components/SessionEditor.vue'
+import type { PomodoroLog } from '../services/service'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
 const pomodoroStore = usePomodoroStore()
 const analyticsStore = useAnalyticsStore()
-onMounted(async () => {
-  await Promise.all([
-    analyticsStore.load(),
-    taskStore.loadTasks(),
-    skillStore.loadSkills(),
-    pomodoroStore.loadPomodoros(),
-  ])
-})
+const loadError = ref('')
+const saveMessage = ref('')
+const editorOpen = ref(false)
+const editingSession = ref<PomodoroLog | null>(null)
+const isRefreshing = ref(false)
 
-const tasks = taskStore.tasks
-const skills = skillStore.skills
-const pomodoroLog = pomodoroStore.pomodoroLog
+async function loadData(force = false) {
+  isRefreshing.value = true
+  loadError.value = ''
+  try {
+    const results = await Promise.allSettled([
+      analyticsStore.load(force),
+      taskStore.loadTasks(),
+      skillStore.loadSkills(),
+      pomodoroStore.loadPomodoros(),
+    ])
+    const failed = results.find(result => result.status === 'rejected')
+    if (failed?.status === 'rejected') throw failed.reason
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : 'Could not load session history and analytics.'
+  } finally {
+    isRefreshing.value = false
+  }
+}
+
+onMounted(() => loadData())
+
+function openEditor(session: PomodoroLog | null) {
+  editingSession.value = session
+  editorOpen.value = true
+  saveMessage.value = ''
+}
+
+async function sessionSaved(session: PomodoroLog) {
+  editorOpen.value = false
+  const index = pomodoroStore.pomodoroLog.findIndex(log => log.id === session.id)
+  if (index < 0) pomodoroStore.pomodoroLog.unshift(session)
+  else pomodoroStore.pomodoroLog.splice(index, 1, session)
+  saveMessage.value = 'Session saved.'
+  analyticsStore.invalidate()
+  await loadData(true)
+  if (loadError.value) saveMessage.value = 'Session saved, but history or analytics could not refresh. Retry loading.'
+}
+
+const tasks = computed(() => taskStore.tasks)
+const skills = computed(() => skillStore.skills)
+const pomodoroLog = computed(() => pomodoroStore.pomodoroLog)
 
 function countTasksForSkill(skillId: number) {
-  return tasks.filter(t => t.skillId === skillId).length
+  return tasks.value.filter(t => t.skillId === skillId).length
 }
 
 function totalPomodorosForSkill(skillId: number) {
-  return pomodoroLog.filter(log => log.skillId === skillId).length
+  return analyticsStore.summary.breakdown?.find(skill => skill.skillId === skillId)?.pomodoros ??
+    pomodoroLog.value.filter(log => log.skillId === skillId).length
 }
 
 function totalMinutesForSkill(skillId: number) {
-  return pomodoroLog
+  return analyticsStore.summary.breakdown?.find(skill => skill.skillId === skillId)?.minutes ?? pomodoroLog.value
     .filter(log => log.skillId === skillId)
     .reduce((sum, log) => sum + log.duration, 0)
 }
 
 function totalMinutesForSkillPerDay(skillId: number) {
-  const today = new Date().toISOString().slice(0, 10)
-  return pomodoroLog
-    .filter(log => log.skillId === skillId && log.completedAt.slice(0, 10) === today)
+  const today = new Date().toDateString()
+  return pomodoroLog.value
+    .filter(log => log.skillId === skillId && new Date(log.completedAt).toDateString() === today)
     .reduce((sum, log) => sum + log.duration, 0)
 }
 
@@ -113,7 +164,7 @@ function totalMinutesForSkillPerWeek(skillId: number) {
   const startOfWeek = new Date(now)
   startOfWeek.setDate(now.getDate() - now.getDay())
   startOfWeek.setHours(0,0,0,0)
-  return pomodoroLog
+  return pomodoroLog.value
     .filter(log => {
       const d = new Date(log.completedAt)
       return log.skillId === skillId && d >= startOfWeek && d <= now
@@ -124,7 +175,7 @@ function totalMinutesForSkillPerWeek(skillId: number) {
 function totalMinutesForSkillPerYear(skillId: number) {
   const now = new Date()
   const startOfYear = new Date(now.getFullYear(), 0, 1)
-  return pomodoroLog
+  return pomodoroLog.value
     .filter(log => {
       const d = new Date(log.completedAt)
       return log.skillId === skillId && d >= startOfYear && d <= now
@@ -133,12 +184,12 @@ function totalMinutesForSkillPerYear(skillId: number) {
 }
 
 function getTaskName(taskId: number | null | undefined) {
-  const task = tasks.find(t => t.id === taskId)
-  return task ? task.name : 'Unknown'
+  const task = tasks.value.find(t => t.id === taskId)
+  return task ? task.name : 'Unassigned / unavailable'
 }
 function getSkillName(skillId: number | null | undefined) {
-  const skill = skills.find(s => s.id === skillId)
-  return skill ? skill.name : 'Unknown'
+  const skill = skills.value.find(s => s.id === skillId)
+  return skill ? skill.name : 'Unassigned / unavailable'
 }
 function formatDateTime(dt: string) {
   const d = new Date(dt)
@@ -146,8 +197,8 @@ function formatDateTime(dt: string) {
 }
 
 const recentPomodoros = computed(() =>
-  pomodoroStore.pomodoroLog
-    .slice(0, 10),
+  [...pomodoroStore.pomodoroLog].sort((a, b) =>
+    new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime() || (b.id ?? 0) - (a.id ?? 0)),
 )
 // ...existing script code...
 </script>
