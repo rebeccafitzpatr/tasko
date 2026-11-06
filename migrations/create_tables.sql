@@ -26,11 +26,14 @@ CREATE TABLE IF NOT EXISTS pomodoro_logs (
   skill_id BIGINT,
   task_name_snapshot VARCHAR(255) NULL,
   skill_name_snapshot VARCHAR(255) NULL,
+  completion_id CHAR(36) NULL,
+  completion_request VARCHAR(255) NULL,
   duration_minutes INT NOT NULL,
   completed_at DATETIME NOT NULL,
   completed_at_is_utc BOOLEAN NOT NULL DEFAULT TRUE,
   type ENUM('timer','manual') NOT NULL,
   CONSTRAINT chk_pomodoro_duration_positive CHECK (duration_minutes > 0),
+  UNIQUE KEY uq_logs_completion_id (completion_id),
   FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
   FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE SET NULL
 );

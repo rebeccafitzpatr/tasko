@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
-import { useSkillStore } from './skillStore'
 import { useAnalyticsStore } from './analyticsStore'
-import { fetchTasks, createTask, updateTask, deleteTask, addPomodoro } from '../services/service'
+import { fetchTasks, createTask, updateTask, deleteTask } from '../services/service'
 
 export interface Task {
   id: number
@@ -68,29 +67,6 @@ export const useTaskStore = defineStore('task', {
         console.error(e);
       }
       useAnalyticsStore().invalidate()
-    },
-    async incrementPomodoro(taskId: number, minutes: number) {
-      try {
-        const task = this.tasks.find(t => t.id === taskId);
-        const session = await addPomodoro(taskId, minutes, task?.skillId ?? null);
-
-        // Update local state optimistically (or rely on re-fetch)
-        if (task) {
-          task.completedPomodoros = (task.completedPomodoros ?? 0) + 1;
-          task.minutesSpent = (task.minutesSpent ?? 0) + minutes;
-          const skillStore = useSkillStore();
-          const skill = skillStore.skills.find(s => s.id === task.skillId);
-          if (skill) {
-            skill.minutesSpent = (skill.minutesSpent ?? 0) + minutes;
-            console.log(`Updated skill ${skill.name}: spent ${skill.minutesSpent} minutes`);
-          }
-
-          this.pomodoroLog.push(session);
-        }
-      } catch (e) {
-        await this.loadTasks();
-        throw e;
-      }
     },
   },
   persist: true,

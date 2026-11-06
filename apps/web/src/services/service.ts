@@ -17,6 +17,7 @@ export type Task = {
 };
 
 export type PomodoroLog = {
+  completionId?: string | null;
   id?: number;
   taskId: number | null;
   skillId: number | null;
@@ -110,11 +111,11 @@ export async function deleteTask(id: number): Promise<void> {
 }
 
 // Pomodoro logs
-export async function addPomodoro(taskId: number, duration: number, skillId?: number | null): Promise<PomodoroLog> {
+export async function addPomodoro(taskId: number, duration: number, completionId: string): Promise<PomodoroLog> {
   const res = await fetch(`${API_BASE}/pomodoros`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ taskId, duration, skillId, type: 'timer' }),
+    body: JSON.stringify({ taskId, duration, completionId, type: 'timer' }),
   });
   return handleResponse<PomodoroLog>(res);
 }
