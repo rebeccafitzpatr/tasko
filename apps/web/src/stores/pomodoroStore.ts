@@ -13,6 +13,7 @@ export const usePomodoroStore = defineStore('pomodoro', {
     sessionType: 'work' as 'work' | 'break',
     currentTaskId: null as number | null,
     duration: 25,
+    completionError: '',
     pomodoroLog: [] as PomodoroLog[], // keep a local cache of logs
   }),
   actions: {
@@ -28,6 +29,7 @@ export const usePomodoroStore = defineStore('pomodoro', {
     },
     start() {
       if (this.isRunning) return
+      this.completionError = ''
       this.isRunning = true
       if (interval) clearInterval(interval)
       interval = setInterval(async () => {
@@ -35,19 +37,25 @@ export const usePomodoroStore = defineStore('pomodoro', {
           this.timeLeft--
         } else {
           this.pause()
-          // on completion of timer
-          if (this.currentTaskId != null) {
-            const taskStore = useTaskStore()
-            await taskStore.incrementPomodoro(this.currentTaskId, this.duration)
-            const skillStore = useSkillStore()
-            const task = taskStore.tasks.find(t => t.id === this.currentTaskId)
-            if (task?.skillId != null) {
-              await skillStore.incrementSkillTime(task.skillId, this.duration)
+          try {
+            if (this.currentTaskId != null) {
+              const taskStore = useTaskStore()
+              await taskStore.incrementPomodoro(this.currentTaskId, this.duration)
+              const skillStore = useSkillStore()
+              const task = taskStore.tasks.find(t => t.id === this.currentTaskId)
+              if (task?.skillId != null) {
+                await skillStore.incrementSkillTime(task.skillId, this.duration)
+              }
+              const analyticsStore = useAnalyticsStore()
+              await analyticsStore.load(true)
             }
-            const analyticsStore = useAnalyticsStore()
-            await analyticsStore.load(true)
+          } catch (error) {
+            this.completionError = error instanceof Error
+              ? error.message
+              : 'Unable to save the completed session.'
+          } finally {
+            this.reset(false)
           }
-          this.reset()
         }
       }, 1000)
     },
@@ -56,11 +64,12 @@ export const usePomodoroStore = defineStore('pomodoro', {
       if (interval) clearInterval(interval)
       interval = null
     },
-    reset() {
+    reset(clearCompletionError = true) {
       this.timeLeft = this.duration * 60
       this.sessionType = 'work'
       this.isRunning = false
       this.currentTaskId = null
+      if (clearCompletionError) this.completionError = ''
       if (interval) clearInterval(interval)
       interval = null
     },

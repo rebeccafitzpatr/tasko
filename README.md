@@ -16,7 +16,7 @@ Its really driven by the fact that I really wish that something this intuitive w
   - core tables
     - skills: id, name, minutes_spent, created_at, updated_at
     - tasks: id, name, skill_id, status, completed_pomodoros, minutes_spent, created_at, updated_at
-    - pomodoro_logs: id, task_id, skill_id, duration_minutes, completed_at, type ('timer'|'manual')
+    - pomodoro_logs: id, task_id, skill_id, task_name_snapshot, skill_name_snapshot, duration_minutes, completed_at, type ('timer'|'manual')
 - better UI
 - release as mobile app with mobile features : offline, swipe features, notifications, widgets
 
@@ -25,8 +25,8 @@ Its really driven by the fact that I really wish that something this intuitive w
 - apps/backend/types.ts — TypeScript interfaces for Task, Skill, PomodoroLog
 - apps/backend/api.ts — Express router with all API endpoints
 - backend/index.ts — mount API routes and initialize DB (updated)
-- Analytics totals calculated from pomodoro logs
-- breakdowns taken from task table
+- Session logs are the source of truth for time analytics; task and skill minute totals are compatibility counters.
+- Session validation, timestamp rules, deletion snapshots, and migration steps are documented in [migrations/session-history.md](./migrations/session-history.md).
 
 ### Stores
 

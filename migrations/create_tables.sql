@@ -18,13 +18,19 @@ CREATE TABLE IF NOT EXISTS tasks (
   FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE SET NULL
 );
 
+-- Session logs are the source of truth; task/skill minute counters are compatibility caches.
+-- Snapshots preserve labels when ON DELETE SET NULL detaches a historical session.
 CREATE TABLE IF NOT EXISTS pomodoro_logs (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   task_id BIGINT,
   skill_id BIGINT,
+  task_name_snapshot VARCHAR(255) NULL,
+  skill_name_snapshot VARCHAR(255) NULL,
   duration_minutes INT NOT NULL,
   completed_at DATETIME NOT NULL,
-  type ENUM('timer','manual') NOT NULL DEFAULT 'timer',
+  completed_at_is_utc BOOLEAN NOT NULL DEFAULT TRUE,
+  type ENUM('timer','manual') NOT NULL,
+  CONSTRAINT chk_pomodoro_duration_positive CHECK (duration_minutes > 0),
   FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
   FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE SET NULL
 );

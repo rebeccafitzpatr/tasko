@@ -16,10 +16,12 @@ export interface Task {
 }
 
 export interface PomodoroLog {
-  id?: number
+  id: number
   taskId?: number | null
   skillId?: number | null
+  taskName: string | null
+  skillName: string | null
   duration: number
   completedAt: string
-  type?: 'timer' | 'manual'
+  type: 'timer' | 'manual'
 }

@@ -50,9 +50,9 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="log in recentPomodoros" :key="log.completedAt + log.taskId">
-              <td data-label="Task">{{ getTaskName(log.taskId) }}</td>
-              <td data-label="Skill">{{ getSkillName(log.skillId) }}</td>
+            <tr v-for="log in recentPomodoros" :key="log.id ?? log.completedAt + log.taskId">
+              <td data-label="Task">{{ log.taskName ?? getTaskName(log.taskId) }}</td>
+              <td data-label="Skill">{{ log.skillName ?? getSkillName(log.skillId) }}</td>
               <td data-label="Duration">{{ log.duration }} min</td>
               <td data-label="Completed">{{ formatDateTime(log.completedAt) }}</td>
             </tr>
@@ -147,13 +147,7 @@ function formatDateTime(dt: string) {
 
 const recentPomodoros = computed(() =>
   pomodoroStore.pomodoroLog
-    .filter(log => {
-      const taskExists = log.taskId != null && taskStore.tasks.some(task => task.id === log.taskId)
-      const skillExists = log.skillId == null || skillStore.skills.some(skill => skill.id === log.skillId)
-      return taskExists && skillExists
-    })
-    .slice(-10)
-    .reverse(),
+    .slice(0, 10),
 )
 // ...existing script code...
 </script>

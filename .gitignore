@@ -27,5 +27,6 @@ dist-ssr
 /plan
 
 #planning
-*.md    
+/specs
+
 
