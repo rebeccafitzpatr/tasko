@@ -47,21 +47,30 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
   }
   if (sql.includes('SELECT COUNT(*) AS c FROM tasks')) return [{ c: taskExists ? 1 : 0 }]
   if (sql.includes('GROUP BY s.id, s.name')) {
+    expect(sql).not.toContain('LIMIT')
+    expect(sql).toContain('AS directMinutes')
+    return hierarchySkills.map(skill => {
     const associated = [...sessions.values()].filter(session =>
-      (session.skillId === 4 || session.parentSkillId === 4) && inRange(session, values[6], values[8]))
+      (session.skillId === skill.id || session.parentSkillId === skill.id) && inRange(session, values[6], values[8]))
+    const direct = associated.filter(session => session.skillId === skill.id)
+    const parent = hierarchySkills.find(item => item.id === skill.parentId)
     expect(sql).toContain('OR pl.parent_skill_id_snapshot = s.id')
     const periodTotal = (start: unknown, end: unknown) => associated
       .filter(session => {
         const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
         return time >= String(start) && time <= String(end)
       }).reduce((sum, session) => sum + session.duration, 0)
-    return [{
-      skillId: 4, skillName: 'English', pomodoros: associated.length,
+    return {
+      skillId: skill.id, skillName: skill.name, pomodoros: associated.length,
+      parentId: skill.parentId, parentName: parent?.name ?? null,
+      skillPath: parent ? `${parent.name} / ${skill.name}` : skill.name,
+      directPomodoros: direct.length, directMinutes: direct.reduce((sum, session) => sum + session.duration, 0),
       minutes: associated.reduce((sum, session) => sum + session.duration, 0),
       todayMinutes: periodTotal(values[0], values[1]),
       weekMinutes: periodTotal(values[2], values[3]),
       yearMinutes: periodTotal(values[4], values[5]),
-    }]
+    }
+    })
   }
   if (sql.includes('AS cursorTime')) {
     if (failHistory) throw new Error('History unavailable')
@@ -260,6 +269,36 @@ function skillRequest(path = '', method = 'GET', body?: unknown) {
 }
 
 describe('skill hierarchy HTTP behavior and historical assignments', () => {
+  test('range summaries include all sessions and distinguish direct totals from parent rollups', async () => {
+    hierarchySkills.push({ id: 5, name: 'Grammar', parentId: 4, minutesSpent: 0 })
+    for (let id = 1; id <= 140; id++) {
+      sessions.set(`range-${id}`, {
+        id, taskId: null, skillId: 5, parentSkillId: 4, parentSkillName: 'English',
+        taskName: null, skillName: 'Grammar', skillPath: 'English / Grammar', duration: 2,
+        completedAt: '2026-01-31T23:59:59Z', type: 'manual', completionId: null, completionRequest: null,
+      })
+    }
+    sessions.set('direct', { ...sessions.get('range-1')!, id: 141, skillId: 4, parentSkillId: null, duration: 10 })
+    sessions.set('unassigned', { ...sessions.get('range-1')!, id: 142, skillId: null, parentSkillId: null, duration: 7 })
+    sessions.set('outside', { ...sessions.get('range-1')!, id: 143, completedAt: '2026-02-01T00:00:00Z' })
+    const summaryUrl = url.replace('/pomodoros', '/analytics/summary')
+    const result = await fetch(`${summaryUrl}?start=2026-01-01&end=2026-01-31`)
+    expect(result.status).toBe(200)
+    expect(await result.json()).toMatchObject({
+      totalPomodoros: 142, totalMinutes: 297,
+      range: { start: '2026-01-01', end: '2026-01-31', timezone: 'UTC', endInclusive: true },
+      breakdown: [
+        { skillId: 4, parentId: null, minutes: 290, pomodoros: 141, directMinutes: 10, directPomodoros: 1 },
+        { skillId: 5, parentId: 4, skillPath: 'English / Grammar', minutes: 280, pomodoros: 140, directMinutes: 280 },
+      ],
+    })
+    const empty = await fetch(`${summaryUrl}?start=2025-01-01&end=2025-01-01`)
+    expect(await empty.json()).toMatchObject({
+      totalPomodoros: 0, totalMinutes: 0, breakdown: [{ minutes: 0 }, { minutes: 0 }],
+    })
+    expect((await fetch(`${summaryUrl}?start=2026-02-01&end=2026-01-01`)).status).toBe(400)
+  })
+
   test('creates standalone and child skills and reads the relationship', async () => {
     const parent = await skillRequest('', 'POST', { name: 'Programming' })
     expect(parent.status).toBe(201)

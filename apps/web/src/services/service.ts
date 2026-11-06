@@ -35,12 +35,18 @@ export type PomodoroLog = {
 };
 
 export type AnalyticsSummary = {
+  range?: { start: string | null; end: string | null; timezone: 'UTC'; endInclusive: true };
   totalPomodoros: number;
   totalMinutes?: number;
   totalTasks?: number;
   breakdown?: Array<{
     skillId?: number
     skillName?: string
+    parentId?: number | null
+    parentName?: string | null
+    skillPath?: string
+    directPomodoros?: number
+    directMinutes?: number
     pomodoros?: number
     minutes?: number
     todayMinutes?: number
