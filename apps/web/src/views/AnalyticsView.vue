@@ -6,14 +6,36 @@
     <button v-if="loadError" :disabled="isRefreshing" @click="loadData(true)">Retry loading</button>
     <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
     <form class="history-filters" @submit.prevent="applyRange">
-      <label>Start date (UTC)<input v-model="startDate" name="start" type="date" /></label>
-      <label>End date (UTC)<input v-model="endDate" name="end" type="date" /></label>
+      <label>Period (UTC)
+        <select v-model="selectedPeriod" name="period" :disabled="rangeBusy" @change="choosePeriod">
+          <option v-for="period in reportPeriods" :key="period.value" :value="period.value">{{ period.label }}</option>
+        </select>
+      </label>
+      <label>Start date (UTC)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
+      <label>End date (UTC)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
       <button :disabled="isRefreshing || historyLoading || editorOpen">Apply dates</button>
       <button type="button" :disabled="isRefreshing || historyLoading || editorOpen" @click="clearRange">All dates</button>
     </form>
     <p v-if="rangeError" role="alert">{{ rangeError }}</p>
     <p>Session totals: {{ appliedRange.start || 'all history' }} to {{ appliedRange.end || 'latest' }}.
       Task count includes all current tasks. Period figures use UTC (weeks start Sunday) within these dates.</p>
+    <label class="compare-toggle"><input v-model="compareEnabled" name="compare" type="checkbox" :disabled="rangeBusy" @change="loadComparison" />
+      Compare with the prior equal-length period</label>
+    <section v-if="compareEnabled" class="comparison card" aria-label="Prior period comparison">
+      <p v-if="comparisonLoading" role="status">Loading prior period...</p>
+      <p v-if="comparisonError" role="alert">{{ comparisonError }}</p>
+      <button v-if="comparisonError" :disabled="comparisonLoading" @click="loadComparison">Retry comparison</button>
+      <p v-if="comparisonUnavailable">{{ comparisonUnavailable }}</p>
+      <template v-if="priorSummary && analyticsMatchesRange && !comparisonLoading">
+        <h2>Prior period: {{ priorRange?.start }} to {{ priorRange?.end }} (UTC)</h2>
+        <div class="comparison-totals">
+          <p>Prior time: {{ priorSummary.totalMinutes ?? 0 }} min.
+            Change: {{ comparisonChange(analyticsStore.summary.totalMinutes ?? 0, priorSummary.totalMinutes ?? 0, 'min') }}</p>
+          <p>Prior sessions: {{ priorSummary.totalPomodoros }}.
+            Change: {{ comparisonChange(analyticsStore.summary.totalPomodoros, priorSummary.totalPomodoros, 'sessions') }}</p>
+        </div>
+      </template>
+    </section>
     <p v-if="isRefreshing" role="status">Loading analytics...</p>
     <div v-if="analyticsMatchesRange" class="analytics-summary card">
       <div class="summary-item">
@@ -22,10 +44,11 @@
         <span v-else class="summary-value">{{ analyticsStore.summary.totalTasks }}</span>
       </div>
       <div class="summary-item">
-        <span class="summary-label">Total Pomodoros</span>
+        <span class="summary-label">Total sessions</span>
         <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
         <span v-else class="summary-value">{{ analyticsStore.summary.totalPomodoros }}</span>
       </div>
+      <p v-if="analyticsMatchesRange && !isRefreshing && analyticsStore.summary.totalPomodoros === 0">No sessions in the selected range. Totals are zero.</p>
       <div class="summary-item">
         <span class="summary-label">Total time spent</span>
         <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
@@ -48,6 +71,11 @@
             <span>This week (UTC): <b>{{ skillSummary(skill.id)?.weekMinutes ?? 0 }}</b> min</span>
             <span>This year (UTC): <b>{{ skillSummary(skill.id)?.yearMinutes ?? 0 }}</b> min</span>
           </div>
+          <p v-if="compareEnabled && priorSummary && !comparisonLoading" class="skill-comparison">
+            Prior: {{ priorSkillSummary(skill.id)?.minutes ?? 0 }} min / {{ priorSkillSummary(skill.id)?.pomodoros ?? 0 }} sessions.
+            Time change: {{ comparisonChange(totalMinutesForSkill(skill.id), priorSkillSummary(skill.id)?.minutes ?? 0, 'min') }}.
+            Session change: {{ comparisonChange(totalPomodorosForSkill(skill.id), priorSkillSummary(skill.id)?.pomodoros ?? 0, 'sessions') }}
+          </p>
         </li>
       </ul>
     </div>
@@ -105,8 +133,9 @@ import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useAnalyticsStore } from '../stores/analyticsStore'
 import SessionEditor from '../components/SessionEditor.vue'
-import type { PomodoroLog, DateRange } from '../services/service'
+import { fetchAnalytics, type AnalyticsSummary, type PomodoroLog, type DateRange } from '../services/service'
 import { skillLabel } from '../services/skillLabels'
+import { reportPeriods, periodRange, previousRange, validateReportRange, comparisonChange, type ReportPeriod } from '../services/reportPeriods'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
@@ -123,6 +152,15 @@ const rangeError = ref('')
 const startDate = ref('')
 const endDate = ref('')
 const appliedRange = ref<DateRange>({})
+const selectedPeriod = ref<ReportPeriod>('all')
+const rangeBusy = computed(() => isRefreshing.value || historyLoading.value || editorOpen.value)
+const compareEnabled = ref(false)
+const comparisonLoading = ref(false)
+const comparisonError = ref('')
+const comparisonUnavailable = ref('')
+const priorSummary = ref<AnalyticsSummary | null>(null)
+const priorRange = ref<DateRange | null>(null)
+let comparisonRequestId = 0
 const analyticsMatchesRange = computed(() => analyticsStore.hasLoaded &&
   analyticsStore.cacheKey === JSON.stringify([appliedRange.value.start ?? null, appliedRange.value.end ?? null]))
 const currentCursor = ref<string | null>(null)
@@ -153,12 +191,15 @@ function retryHistory() {
 }
 
 async function applyRange() {
+  if (rangeBusy.value) return
   rangeError.value = ''
-  if (startDate.value && endDate.value && startDate.value > endDate.value) {
-    rangeError.value = 'Start date must be on or before end date.'
+  const range = { start: startDate.value || undefined, end: endDate.value || undefined }
+  try { validateReportRange(range) }
+  catch (cause) {
+    rangeError.value = cause instanceof Error ? cause.message : 'Enter a valid date range.'
     return
   }
-  appliedRange.value = { start: startDate.value || undefined, end: endDate.value || undefined }
+  appliedRange.value = range
   pomodoroStore.pomodoroLog = []
   pomodoroStore.historyHasMore = false
   currentCursor.value = null
@@ -167,9 +208,49 @@ async function applyRange() {
 }
 
 function clearRange() {
+  selectedPeriod.value = 'all'
   startDate.value = ''
   endDate.value = ''
   return applyRange()
+}
+
+function choosePeriod() {
+  if (selectedPeriod.value === 'custom') return
+  const range = periodRange(selectedPeriod.value)
+  startDate.value = range.start ?? ''
+  endDate.value = range.end ?? ''
+  return applyRange()
+}
+
+function priorSkillSummary(id: number) {
+  return priorSummary.value?.breakdown?.find(skill => skill.skillId === id)
+}
+
+async function loadComparison() {
+  const requestId = ++comparisonRequestId
+  priorSummary.value = null
+  priorRange.value = null
+  comparisonError.value = ''
+  comparisonUnavailable.value = ''
+  comparisonLoading.value = false
+  if (!compareEnabled.value) return
+  const { start, end } = appliedRange.value
+  if (!start || !end) {
+    comparisonUnavailable.value = 'Choose both a start and end date to compare equal-length periods. All dates has no prior equivalent.'
+    return
+  }
+  comparisonLoading.value = true
+  try {
+    const range = previousRange({ start, end })
+    priorRange.value = range
+    const summary = await fetchAnalytics(range)
+    if (requestId === comparisonRequestId) priorSummary.value = summary
+  } catch (cause) {
+    if (requestId === comparisonRequestId) comparisonError.value =
+      cause instanceof Error ? cause.message : 'Could not load the prior period. Retry comparison.'
+  } finally {
+    if (requestId === comparisonRequestId) comparisonLoading.value = false
+  }
 }
 
 async function loadData(force = false) {
@@ -182,6 +263,7 @@ async function loadData(force = false) {
       taskStore.loadTasks(),
       skillStore.loadSkills(),
       loadHistory(null, 'first'),
+      loadComparison(),
     ])
     const failed = results.find(result => result.status === 'rejected')
     if (failed?.status === 'rejected') throw failed.reason
@@ -262,6 +344,12 @@ const recentPomodoros = computed(() =>
   margin-bottom: 1rem;
 }
 .history-filters label { display: flex; flex-direction: column; gap: 0.4rem; text-align: left; }
+.history-filters label { flex: 1 1 160px; min-width: 0; }
+.history-filters input, .history-filters select { width: 100%; min-width: 0; box-sizing: border-box; }
+.compare-toggle { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+.comparison { overflow-wrap: anywhere; }
+.comparison-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 1rem; }
+.skill-comparison { font-size: 0.9rem; }
 .analytics-root {
   width: 100%;
   min-width: 0;
@@ -448,5 +536,8 @@ const recentPomodoros = computed(() =>
   .skill-periods span {
     font-size: 0.8rem;
   }
+  .skill-periods { grid-template-columns: 1fr; font-size: 0.9rem; }
+  .skill-periods span { border-right: 0; border-bottom: 1px solid var(--border); }
+  .skill-periods span:last-child { border-bottom: 0; }
 }
 </style>

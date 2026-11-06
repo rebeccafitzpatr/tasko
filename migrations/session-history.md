@@ -1,5 +1,22 @@
 # Session history rules
 
+## Period selection and prior comparison
+
+Analytics offers All dates, Today, Last 7/30 days, This week/month/year to date,
+and Custom range. Presets use the current **UTC** day; weeks start Sunday.
+The visible applied boundaries control session totals, skill summaries, history,
+and the period figures inside each skill card. Editing dates is a draft until
+Apply dates; changing a preset applies immediately and resets history to page 1.
+
+Optional comparison uses the immediately preceding, non-overlapping interval
+with the **same inclusive number of UTC calendar days**, not the previous
+calendar month/year. For January 8-14, it compares January 1-7. All-time and
+open-ended ranges require both boundaries before comparison. Prior reports
+query all matching logs, independently of history pages. Missing skill rows
+are treated as no activity for that skill; a zero baseline has no percentage
+change, and two empty periods are explicitly identified. Comparison failures
+have their own retry and do not replace current totals or history.
+
 ## Date-range analytics contract
 
 `GET /api/analytics/summary?start=2026-01-01&end=2026-01-31` returns
