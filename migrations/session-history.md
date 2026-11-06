@@ -44,6 +44,18 @@ On Analytics, choose **Add manual session**, or **Edit** beside a recorded sessi
 
 Corrections lock the existing session and update it and affected task/skill compatibility counters in a transaction. These affected counters are recalculated from session logs, not incremented again. Unchanged assignments preserve historical labels, including names whose related records have been deleted; changed assignments capture the selected records' current labels. Deleted names cannot be selected as new assignments.
 
-Successful saves refresh history, overall totals, and skill summaries. Errors preserve the form so the user can correct input or retry. Reporting refresh failures are shown separately from save failures, with a Retry loading button; they do not resubmit a saved session. History currently displays up to the latest 100 records; all-time summary and skill totals aggregate all records, while the existing daily/weekly/yearly skill figures use the loaded history.
+Successful saves refresh history, overall totals, and skill summaries. Errors preserve the form so the user can correct input or retry. Reporting refresh failures are shown separately from save failures, with retry controls; they do not resubmit a saved session. Saving or editing resets history to the first page of the active date range, since changes can move a record outside that range or to another page.
 
 No additional schema migration is needed for manual entry/editing after both earlier session-history and timer-completion migrations have been applied.
+
+## Paginated history and complete reporting
+
+`GET /api/pomodoros` returns `{ items, hasMore, nextCursor, limit }` instead of an array. `limit` defaults to 25 and must be an integer from 1 to 100. To browse older records, pass the returned `nextCursor` as `cursor` with the same date filters. Every page is ordered by `completed_at DESC, id DESC`; timestamp ties are resolved by ID, and newer inserts do not shift an older-record cursor. The cursor contains the last raw database timestamp, ID, and date boundaries. Invalid cursors, repeated query values, invalid dates, reversed ranges, and out-of-bounds limits receive HTTP 400 with an error message.
+
+Optional `start` and `end` are inclusive UTC calendar dates in `YYYY-MM-DD` format (years 1000 to 9998). Either boundary may be omitted. For example, `?start=2026-01-01&end=2026-01-31&limit=25` includes all of January through 23:59:59 on the end date. The server uses an exclusive next-day upper bound. Legacy timestamps remain in their original wall-clock representation because the original timezone is unknown; filters and period calculations compare those values as stored rather than guessing an offset.
+
+Analytics provides Apply dates / All dates and Newer sessions / Older sessions controls, loading indicators, empty results, and explicit history errors with retry. Filters apply to history and time/session totals, not the current task count. Pages are bounded, but the entire matching history can be browsed; reaching the last page is explicit rather than silently dropping older sessions. Concurrent requests cannot replace a newer page/filter response with stale data.
+
+`GET /api/analytics/summary` accepts the same optional `start`/`end` dates. Overall totals, per-skill counts/minutes, and per-skill `todayMinutes`, `weekMinutes`, and `yearMinutes` aggregate every matching log without pagination or a row limit. Periods use UTC, weeks start Sunday, and period figures are intersected with the selected date range. The UI labels this timezone explicitly. Page navigation does not recompute aggregates from the current page. Current skills receive breakdowns; deleted/unassigned skill sessions still contribute to overall session/time totals.
+
+Deploy API and frontend together for the changed history response shape. No additional migration is required; the existing timestamp index supports history queries.

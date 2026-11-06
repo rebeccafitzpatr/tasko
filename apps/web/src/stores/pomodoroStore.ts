@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { addPomodoro, fetchPomodoros, type PomodoroLog } from '../services/service'
+import { addPomodoro, fetchPomodoros, type PomodoroLog, type HistoryOptions } from '../services/service'
 import { useTaskStore } from './taskStore'
 import { useSkillStore } from './skillStore'
 import { useAnalyticsStore } from './analyticsStore'
@@ -56,6 +56,11 @@ export const usePomodoroStore = defineStore('pomodoro', {
     persistenceError: '',
     refreshError: '',
     pomodoroLog: [] as PomodoroLog[],
+    historyOptions: {} as HistoryOptions,
+    historyHasMore: false,
+    historyNextCursor: null as string | null,
+    historyRequestId: 0,
+    historyIsLoading: false,
     interval: null as ReturnType<typeof setInterval> | null,
   }),
   actions: {
@@ -135,8 +140,22 @@ export const usePomodoroStore = defineStore('pomodoro', {
       this.completionId = null
       this.persistTimer()
     },
-    async loadPomodoros() {
-      this.pomodoroLog = await fetchPomodoros()
+    async loadPomodoros(requestedOptions?: HistoryOptions) {
+      // A timer's background refresh must not supersede a user's page/filter request.
+      if (requestedOptions === undefined && this.historyIsLoading) return
+      const options = requestedOptions ?? this.historyOptions
+      const requestId = ++this.historyRequestId
+      this.historyIsLoading = true
+      try {
+        const page = await fetchPomodoros(options)
+        if (requestId !== this.historyRequestId) return
+        this.pomodoroLog = page.items
+        this.historyHasMore = page.hasMore
+        this.historyNextCursor = page.nextCursor
+        this.historyOptions = { ...options }
+      } finally {
+        if (requestId === this.historyRequestId) this.historyIsLoading = false
+      }
     },
     start() {
       if (this.isRunning || this.isSaving || this.pendingCompletion) return
@@ -181,10 +200,8 @@ export const usePomodoroStore = defineStore('pomodoro', {
       this.isSaving = true
       this.completionError = ''
       try {
-        const session = await addPomodoro(this.currentTaskId, this.duration, this.completionId)
-        if (!this.pomodoroLog.some(log => log.id === session.id)) {
-          this.pomodoroLog.unshift(session)
-        }
+        await addPomodoro(this.currentTaskId, this.duration, this.completionId)
+        // History is a filtered page; do not insert a new record into an unrelated page.
         this.reset(true)
       } catch (error) {
         this.completionError = `Could not save session: ${errorMessage(error)}. Retry to save this same session.`
@@ -199,6 +216,7 @@ export const usePomodoroStore = defineStore('pomodoro', {
           useTaskStore().loadTasks(),
           useSkillStore().loadSkills(),
           useAnalyticsStore().load(true),
+          this.loadPomodoros(),
         ])
         this.refreshError = ''
       } catch (error) {

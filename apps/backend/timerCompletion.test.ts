@@ -20,21 +20,54 @@ let lookupBarrier: Promise<void> | null = null
 let releaseLookups: (() => void) | null = null
 let lookupCount = 0
 let failUpdate = false
+let failHistory = false
+
+function inRange(session: StoredSession, start: unknown, end: unknown) {
+  const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
+  return (start == null || time >= String(start)) && (end == null || time < String(end))
+}
 
 // Exercise the real HTTP handler with a database double that enforces the unique key.
 async function query(strings: TemplateStringsArray, ...values: unknown[]) {
   const sql = strings.join('?')
-  if (sql.includes('SELECT COUNT(*) AS c FROM pomodoro_logs')) return [{ c: sessions.size }]
-  if (sql.includes('SELECT COALESCE(SUM(duration_minutes), 0) AS m FROM pomodoro_logs')) {
-    return [{ m: [...sessions.values()].reduce((sum, session) => sum + session.duration, 0) }]
+  if (sql.includes('SELECT COUNT(*) AS c, COALESCE(SUM(duration_minutes), 0) AS m FROM pomodoro_logs')) {
+    const filtered = [...sessions.values()].filter(session => inRange(session, values[0], values[2]))
+    return [{ c: filtered.length, m: filtered.reduce((sum, session) => sum + session.duration, 0) }]
   }
   if (sql.includes('SELECT COUNT(*) AS c FROM tasks')) return [{ c: taskExists ? 1 : 0 }]
   if (sql.includes('GROUP BY s.id, s.name')) {
-    const associated = [...sessions.values()].filter(session => session.skillId === 4)
+    const associated = [...sessions.values()].filter(session =>
+      session.skillId === 4 && inRange(session, values[6], values[8]))
+    const periodTotal = (start: unknown, end: unknown) => associated
+      .filter(session => {
+        const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
+        return time >= String(start) && time <= String(end)
+      }).reduce((sum, session) => sum + session.duration, 0)
     return [{
       skillId: 4, skillName: 'English', pomodoros: associated.length,
       minutes: associated.reduce((sum, session) => sum + session.duration, 0),
+      todayMinutes: periodTotal(values[0], values[1]),
+      weekMinutes: periodTotal(values[2], values[3]),
+      yearMinutes: periodTotal(values[4], values[5]),
     }]
+  }
+  if (sql.includes('AS cursorTime')) {
+    if (failHistory) throw new Error('History unavailable')
+    expect(sql).toContain('ORDER BY pl.completed_at DESC, pl.id DESC')
+    const beforeTime = values[4]
+    const beforeId = values[7]
+    const filtered = [...sessions.values()]
+      .filter(session => {
+        const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
+        return inRange(session, values[0], values[2]) &&
+          (beforeTime == null || time < String(beforeTime) ||
+            (time === String(beforeTime) && session.id < Number(beforeId)))
+      })
+      .sort((a, b) => b.completedAt.localeCompare(a.completedAt) || b.id - a.id)
+      .slice(0, Number(values[8]))
+    return filtered.map(session => ({
+      ...session, cursorTime: session.completedAt.replace('T', ' ').replace(/Z$/, ''),
+    }))
   }
   if (sql.includes('WHERE completion_id')) {
     const session = sessions.get(String(values[0]))
@@ -148,6 +181,7 @@ beforeEach(() => {
   taskExists = true
   failInsert = false
   failUpdate = false
+  failHistory = false
   lookupBarrier = null
   releaseLookups = null
   lookupCount = 0
@@ -262,6 +296,97 @@ describe('timer completion idempotency', () => {
     expect(insertCount).toBe(1)
     expect(taskUpdates).toBe(1)
     expect(skillUpdates).toBe(1)
+  })
+
+  describe('paginated session history and complete aggregates', () => {
+    function seed(count: number, time = '2026-01-01T12:00:00Z') {
+      for (let id = 1; id <= count; id++) {
+        sessions.set(`seed-${id}`, {
+          id, taskId: null, skillId: 4, taskName: 'Deleted task', skillName: 'English',
+          duration: 1, completedAt: time, type: 'manual', completionId: null, completionRequest: null,
+        })
+      }
+    }
+    async function page(params = '') {
+      const response = await fetch(`${url}?${params}`)
+      expect(response.status).toBe(200)
+      const body = await response.json() as {
+        items: StoredSession[]; hasMore: boolean; nextCursor: string | null; limit: number
+      }
+      return body
+    }
+
+    test('browses more than 100 tied-timestamp records without omissions or duplicates', async () => {
+      seed(235)
+      let cursor: string | null = null
+      const ids: number[] = []
+      do {
+        const result = await page(`limit=100${cursor ? `&cursor=${cursor}` : ''}`)
+        expect(result.items.length).toBeLessThanOrEqual(100)
+        expect(result.hasMore).toBe(result.nextCursor !== null)
+        ids.push(...result.items.map(session => session.id))
+        cursor = result.nextCursor
+      } while (cursor !== null)
+      expect(ids).toEqual(Array.from({ length: 235 }, (_, index) => 235 - index))
+      expect(new Set(ids).size).toBe(235)
+    })
+
+    test('newer inserts between pages do not shift the older-record cursor', async () => {
+      seed(60)
+      const first = await page()
+      sessions.set('newer', {
+        ...sessions.get('seed-1')!, id: 61, completedAt: '2026-02-01T12:00:00Z',
+      })
+      const second = await page(`cursor=${first.nextCursor}`)
+      expect(first.items.map(session => session.id)).toEqual(Array.from({ length: 25 }, (_, i) => 60 - i))
+      expect(second.items.map(session => session.id)).toEqual(Array.from({ length: 25 }, (_, i) => 35 - i))
+    })
+
+    test('includes the complete end date and supports either date boundary alone', async () => {
+      seed(1, '2026-01-01T00:00:00Z')
+      sessions.set('end', { ...sessions.get('seed-1')!, id: 2, completedAt: '2026-01-02T23:59:59Z' })
+      sessions.set('after', { ...sessions.get('seed-1')!, id: 3, completedAt: '2026-01-03T00:00:00Z' })
+      expect((await page('start=2026-01-01&end=2026-01-02')).items.map(session => session.id)).toEqual([2, 1])
+      expect((await page('start=2026-01-03')).items.map(session => session.id)).toEqual([3])
+      expect((await page('end=2026-01-01')).items.map(session => session.id)).toEqual([1])
+      expect((await page('start=2026-02-01')).hasMore).toBe(false)
+    })
+
+    test('aggregates all matching records, including period totals beyond the first page', async () => {
+      const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+      seed(235, now)
+      const history = await page()
+      expect(history.items).toHaveLength(25)
+      const response = await fetch(url.replace('/pomodoros', '/analytics/summary'))
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({
+        totalPomodoros: 235, totalMinutes: 235,
+        breakdown: [{
+          skillId: 4, minutes: 235, pomodoros: 235,
+          todayMinutes: 235, weekMinutes: 235, yearMinutes: 235,
+        }],
+      })
+    })
+
+    test('filtered aggregates include all filtered records, not just the requested page', async () => {
+      seed(140)
+      sessions.set('outside', { ...sessions.get('seed-1')!, id: 141, completedAt: '2026-02-01T00:00:00Z' })
+      const response = await fetch(url.replace('/pomodoros', '/analytics/summary') + '?start=2026-01-01&end=2026-01-01')
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({
+        totalPomodoros: 140, totalMinutes: 140, breakdown: [{ minutes: 140, pomodoros: 140 }],
+      })
+    })
+
+    test('invalid queries and database failures return explicit errors', async () => {
+      expect((await fetch(`${url}?limit=101`)).status).toBe(400)
+      expect((await fetch(`${url}?cursor=invalid`)).status).toBe(400)
+      expect((await fetch(url.replace('/pomodoros', '/analytics/summary') + '?start=invalid')).status).toBe(400)
+      failHistory = true
+      const failed = await fetch(url)
+      expect(failed.status).toBe(500)
+      expect(await failed.json()).toEqual({ error: 'History unavailable' })
+    })
   })
 
   test('concurrent submissions are deduplicated at the unique-key boundary', async () => {

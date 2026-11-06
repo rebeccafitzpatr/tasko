@@ -3,9 +3,19 @@
   <div class="analytics-root">
     <h1>Analytics</h1>
     <p v-if="loadError" role="alert">{{ loadError }}</p>
-    <button v-if="loadError" @click="loadData(true)">Retry loading</button>
+    <button v-if="loadError" :disabled="isRefreshing" @click="loadData(true)">Retry loading</button>
     <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
-    <div class="analytics-summary card">
+    <form class="history-filters" @submit.prevent="applyRange">
+      <label>Start date (UTC)<input v-model="startDate" name="start" type="date" /></label>
+      <label>End date (UTC)<input v-model="endDate" name="end" type="date" /></label>
+      <button :disabled="isRefreshing || historyLoading || editorOpen">Apply dates</button>
+      <button type="button" :disabled="isRefreshing || historyLoading || editorOpen" @click="clearRange">All dates</button>
+    </form>
+    <p v-if="rangeError" role="alert">{{ rangeError }}</p>
+    <p>Session totals: {{ appliedRange.start || 'all history' }} to {{ appliedRange.end || 'latest' }}.
+      Task count includes all current tasks. Period figures use UTC (weeks start Sunday) within these dates.</p>
+    <p v-if="isRefreshing" role="status">Loading analytics...</p>
+    <div v-if="analyticsMatchesRange" class="analytics-summary card">
       <div class="summary-item">
         <span class="summary-label">Total tasks</span>
         <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
@@ -22,7 +32,7 @@
         <span v-else class="summary-value">{{ analyticsStore.summary.totalMinutes }} min</span>
       </div>
     </div>
-    <div class="card">
+    <div v-if="analyticsMatchesRange" class="card">
       <h2>Time spent per skill</h2>
       <ul class="skill-list">
         <li v-for="skill in skills" :key="skill.id" class="skill-card">
@@ -33,19 +43,30 @@
             <span>{{ totalMinutesForSkill(skill.id) }} min</span>
           </div>
           <div class="skill-periods">
-            <span>Today: <b>{{ totalMinutesForSkillPerDay(skill.id) }}</b> min</span>
-            <span>This week: <b>{{ totalMinutesForSkillPerWeek(skill.id) }}</b> min</span>
-            <span>This year: <b>{{ totalMinutesForSkillPerYear(skill.id) }}</b> min</span>
+            <span>Today (UTC): <b>{{ skillSummary(skill.id)?.todayMinutes ?? 0 }}</b> min</span>
+            <span>This week (UTC): <b>{{ skillSummary(skill.id)?.weekMinutes ?? 0 }}</b> min</span>
+            <span>This year (UTC): <b>{{ skillSummary(skill.id)?.yearMinutes ?? 0 }}</b> min</span>
           </div>
         </li>
       </ul>
     </div>
     <div class="card">
       <h2>Session history</h2>
-      <button :disabled="isRefreshing || editorOpen" @click="openEditor(null)">Add manual session</button>
+      <button :disabled="isRefreshing || historyLoading || editorOpen" @click="openEditor(null)">Add manual session</button>
       <SessionEditor v-if="editorOpen" :session="editingSession" :tasks="tasks" :skills="skills"
         @saved="sessionSaved" @cancel="editorOpen = false" />
-      <p>Showing the latest {{ recentPomodoros.length }} sessions (up to 100).</p>
+      <p v-if="historyLoading" role="status">Loading sessions...</p>
+      <p v-if="historyError" role="alert">{{ historyError }}</p>
+      <button v-if="historyError" :disabled="historyLoading || isRefreshing" @click="retryHistory">Retry history</button>
+      <p v-if="!historyLoading && !historyError">Page {{ previousCursors.length + 1 }}: {{ recentPomodoros.length }} sessions.
+        {{ pomodoroStore.historyHasMore ? 'Older sessions available.' : 'End of history.' }}</p>
+      <p v-if="!historyLoading && !historyError && recentPomodoros.length === 0">No sessions match these dates.</p>
+      <div class="history-navigation">
+        <button :disabled="isRefreshing || historyLoading || editorOpen || previousCursors.length === 0"
+          @click="loadHistory(previousCursors[previousCursors.length - 1] ?? null, 'previous')">Newer sessions</button>
+        <button :disabled="isRefreshing || historyLoading || editorOpen || !pomodoroStore.historyHasMore"
+          @click="loadHistory(pomodoroStore.historyNextCursor, 'next')">Older sessions</button>
+      </div>
       <div class="table-responsive">
         <table class="analytics-table">
           <thead>
@@ -66,7 +87,7 @@
               <td data-label="Completed">{{ formatDateTime(log.completedAt) }}</td>
               <td data-label="Type">{{ log.type }}</td>
               <td data-label="Actions">
-                <button :disabled="isRefreshing || editorOpen || log.id == null" @click="openEditor(log)">Edit</button>
+                <button :disabled="isRefreshing || historyLoading || editorOpen || log.id == null" @click="openEditor(log)">Edit</button>
               </td>
             </tr>
           </tbody>
@@ -83,7 +104,7 @@ import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useAnalyticsStore } from '../stores/analyticsStore'
 import SessionEditor from '../components/SessionEditor.vue'
-import type { PomodoroLog } from '../services/service'
+import type { PomodoroLog, DateRange } from '../services/service'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
@@ -94,16 +115,71 @@ const saveMessage = ref('')
 const editorOpen = ref(false)
 const editingSession = ref<PomodoroLog | null>(null)
 const isRefreshing = ref(false)
+const historyLoading = ref(false)
+const historyError = ref('')
+const rangeError = ref('')
+const startDate = ref('')
+const endDate = ref('')
+const appliedRange = ref<DateRange>({})
+const analyticsMatchesRange = computed(() => analyticsStore.hasLoaded &&
+  analyticsStore.cacheKey === JSON.stringify([appliedRange.value.start ?? null, appliedRange.value.end ?? null]))
+const currentCursor = ref<string | null>(null)
+const previousCursors = ref<(string | null)[]>([])
+type PageAction = 'first' | 'next' | 'previous'
+let retryPage: { cursor: string | null; action: PageAction } = { cursor: null, action: 'first' }
+
+async function loadHistory(cursor: string | null, action: PageAction) {
+  if (historyLoading.value) return
+  historyLoading.value = true
+  historyError.value = ''
+  retryPage = { cursor, action }
+  try {
+    await pomodoroStore.loadPomodoros({ ...appliedRange.value, limit: 25, cursor: cursor ?? undefined })
+    if (action === 'next') previousCursors.value.push(currentCursor.value)
+    else if (action === 'previous') previousCursors.value.pop()
+    else previousCursors.value = []
+    currentCursor.value = cursor
+  } catch (error) {
+    historyError.value = error instanceof Error ? error.message : 'Could not load sessions. Retry history.'
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+function retryHistory() {
+  return loadHistory(retryPage.cursor, retryPage.action)
+}
+
+async function applyRange() {
+  rangeError.value = ''
+  if (startDate.value && endDate.value && startDate.value > endDate.value) {
+    rangeError.value = 'Start date must be on or before end date.'
+    return
+  }
+  appliedRange.value = { start: startDate.value || undefined, end: endDate.value || undefined }
+  pomodoroStore.pomodoroLog = []
+  pomodoroStore.historyHasMore = false
+  currentCursor.value = null
+  previousCursors.value = []
+  await loadData(true)
+}
+
+function clearRange() {
+  startDate.value = ''
+  endDate.value = ''
+  return applyRange()
+}
 
 async function loadData(force = false) {
+  if (isRefreshing.value || historyLoading.value) return
   isRefreshing.value = true
   loadError.value = ''
   try {
     const results = await Promise.allSettled([
-      analyticsStore.load(force),
+      analyticsStore.load(force, appliedRange.value),
       taskStore.loadTasks(),
       skillStore.loadSkills(),
-      pomodoroStore.loadPomodoros(),
+      loadHistory(null, 'first'),
     ])
     const failed = results.find(result => result.status === 'rejected')
     if (failed?.status === 'rejected') throw failed.reason
@@ -122,65 +198,38 @@ function openEditor(session: PomodoroLog | null) {
   saveMessage.value = ''
 }
 
-async function sessionSaved(session: PomodoroLog) {
+async function sessionSaved() {
   editorOpen.value = false
-  const index = pomodoroStore.pomodoroLog.findIndex(log => log.id === session.id)
-  if (index < 0) pomodoroStore.pomodoroLog.unshift(session)
-  else pomodoroStore.pomodoroLog.splice(index, 1, session)
+  // An edited timestamp can move the row to another page or outside the active date range.
+  pomodoroStore.pomodoroLog = []
+  pomodoroStore.historyHasMore = false
+  currentCursor.value = null
+  previousCursors.value = []
   saveMessage.value = 'Session saved.'
   analyticsStore.invalidate()
   await loadData(true)
-  if (loadError.value) saveMessage.value = 'Session saved, but history or analytics could not refresh. Retry loading.'
+  if (loadError.value || historyError.value) {
+    saveMessage.value = 'Session saved, but history or analytics could not refresh. Retry loading.'
+  }
 }
 
 const tasks = computed(() => taskStore.tasks)
 const skills = computed(() => skillStore.skills)
-const pomodoroLog = computed(() => pomodoroStore.pomodoroLog)
 
 function countTasksForSkill(skillId: number) {
   return tasks.value.filter(t => t.skillId === skillId).length
 }
 
 function totalPomodorosForSkill(skillId: number) {
-  return analyticsStore.summary.breakdown?.find(skill => skill.skillId === skillId)?.pomodoros ??
-    pomodoroLog.value.filter(log => log.skillId === skillId).length
+  return skillSummary(skillId)?.pomodoros ?? 0
 }
 
 function totalMinutesForSkill(skillId: number) {
-  return analyticsStore.summary.breakdown?.find(skill => skill.skillId === skillId)?.minutes ?? pomodoroLog.value
-    .filter(log => log.skillId === skillId)
-    .reduce((sum, log) => sum + log.duration, 0)
+  return skillSummary(skillId)?.minutes ?? 0
 }
 
-function totalMinutesForSkillPerDay(skillId: number) {
-  const today = new Date().toDateString()
-  return pomodoroLog.value
-    .filter(log => log.skillId === skillId && new Date(log.completedAt).toDateString() === today)
-    .reduce((sum, log) => sum + log.duration, 0)
-}
-
-function totalMinutesForSkillPerWeek(skillId: number) {
-  const now = new Date()
-  const startOfWeek = new Date(now)
-  startOfWeek.setDate(now.getDate() - now.getDay())
-  startOfWeek.setHours(0,0,0,0)
-  return pomodoroLog.value
-    .filter(log => {
-      const d = new Date(log.completedAt)
-      return log.skillId === skillId && d >= startOfWeek && d <= now
-    })
-    .reduce((sum, log) => sum + log.duration, 0)
-}
-
-function totalMinutesForSkillPerYear(skillId: number) {
-  const now = new Date()
-  const startOfYear = new Date(now.getFullYear(), 0, 1)
-  return pomodoroLog.value
-    .filter(log => {
-      const d = new Date(log.completedAt)
-      return log.skillId === skillId && d >= startOfYear && d <= now
-    })
-    .reduce((sum, log) => sum + log.duration, 0)
+function skillSummary(skillId: number) {
+  return analyticsStore.summary.breakdown?.find(skill => skill.skillId === skillId)
 }
 
 function getTaskName(taskId: number | null | undefined) {
@@ -197,13 +246,20 @@ function formatDateTime(dt: string) {
 }
 
 const recentPomodoros = computed(() =>
-  [...pomodoroStore.pomodoroLog].sort((a, b) =>
-    new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime() || (b.id ?? 0) - (a.id ?? 0)),
+  pomodoroStore.pomodoroLog,
 )
 // ...existing script code...
 </script>
 
 <style scoped>
+.history-filters, .history-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+.history-filters label { display: flex; flex-direction: column; gap: 0.4rem; text-align: left; }
 .analytics-root {
   width: 100%;
   min-width: 0;

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { TIMER_STORAGE_KEY, usePomodoroStore } from '../src/stores/pomodoroStore'
-import { addPomodoro, fetchAnalytics, fetchSkills, fetchTasks } from '../src/services/service'
+import { addPomodoro, fetchAnalytics, fetchSkills, fetchTasks, fetchPomodoros } from '../src/services/service'
 
 vi.mock('../src/services/service', () => ({
   addPomodoro: vi.fn(),
-  fetchPomodoros: vi.fn().mockResolvedValue([]),
+  fetchPomodoros: vi.fn(),
   fetchAnalytics: vi.fn(),
   fetchSkills: vi.fn(),
   fetchTasks: vi.fn(),
@@ -28,6 +28,7 @@ describe('durable timer', () => {
     vi.resetAllMocks()
     vi.mocked(fetchTasks).mockResolvedValue([])
     vi.mocked(fetchSkills).mockResolvedValue([])
+    vi.mocked(fetchPomodoros).mockResolvedValue({ items: [], hasMore: false, nextCursor: null, limit: 25 })
     vi.mocked(fetchAnalytics).mockResolvedValue({ totalPomodoros: 1, totalMinutes: 1, totalTasks: 1 })
     vi.mocked(addPomodoro).mockImplementation(async (taskId, duration, completionId) => ({
       id: 1, taskId, duration, completionId,
