@@ -1,10 +1,13 @@
 export type Skill = {
   id: number;
   name: string;
+  parentId?: number | null;
+  parentName?: string | null;
   minutesSpent?: number;
 };
 
 export type Task = {
+  skillPath?: string | null;
   id: number;
   name: string;
   skillId?: number | null;
@@ -17,6 +20,9 @@ export type Task = {
 };
 
 export type PomodoroLog = {
+  parentSkillId?: number | null;
+  parentSkillName?: string | null;
+  skillPath?: string | null;
   completionId?: string | null;
   id?: number;
   taskId: number | null;
@@ -45,7 +51,7 @@ export type AnalyticsSummary = {
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
-async function handleResponse<T>(res: Response): Promise<T> {
+async function requireOk(res: Response): Promise<void> {
   if (!res.ok) {
     const text = await res.text();
     if (res.headers.get('content-type')?.includes('application/json')) {
@@ -56,6 +62,10 @@ async function handleResponse<T>(res: Response): Promise<T> {
     }
     throw new Error(text || 'API request failed');
   }
+}
+
+async function handleResponse<T>(res: Response): Promise<T> {
+  await requireOk(res);
   return res.json() as Promise<T>;
 }
 
@@ -64,19 +74,19 @@ export async function fetchSkills(): Promise<Skill[]> {
   const res = await fetch(`${API_BASE}/skills`);
   return handleResponse<Skill[]>(res);
 }
-export async function createSkill(name: string): Promise<Skill> {
+export async function createSkill(name: string, parentId: number | null = null): Promise<Skill> {
   const res = await fetch(`${API_BASE}/skills`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, parentId }),
   });
   return handleResponse<Skill>(res);
 }
-export async function updateSkill(id: number, name: string): Promise<Skill> {
+export async function updateSkill(id: number, name: string, parentId?: number | null): Promise<Skill> {
   const res = await fetch(`${API_BASE}/skills/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, parentId }),
   });
   return handleResponse<Skill>(res);
 }
@@ -90,7 +100,7 @@ export async function updateSkillMinutes(id: number, minutesSpent: number): Prom
 }
 export async function deleteSkill(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/skills/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(await res.text());
+  await requireOk(res);
 }
 
 // Tasks
@@ -116,7 +126,7 @@ export async function updateTask(id: number, payload: Partial<Task>): Promise<Ta
 }
 export async function deleteTask(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(await res.text());
+  await requireOk(res);
 }
 
 // Pomodoro logs

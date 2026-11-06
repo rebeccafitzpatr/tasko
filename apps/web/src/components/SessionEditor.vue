@@ -3,6 +3,7 @@
     <h3>{{ session ? 'Edit session' : 'Add manual session' }}</h3>
     <p>Enter the completion time in your local timezone. Task and skill are optional.</p>
     <p v-if="session">Original type: {{ session.type }}. Editing does not change the session type.</p>
+    <p v-if="session?.skillPath">Recorded skill: {{ session.skillPath }}. Unchanged assignments preserve this historical path.</p>
     <fieldset :disabled="isSaving">
       <label>
         Completed at
@@ -16,19 +17,19 @@
         Task
         <select v-model="taskId" name="taskId" @change="selectTask">
           <option :value="null">No task</option>
-          <option v-for="task in tasks" :key="task.id" :value="task.id">{{ task.name }}</option>
+          <option v-for="task in tasks" :key="task.id" :value="task.id">{{ task.name }} ({{ task.skillPath ?? taskSkillLabel(task.skillId) }})</option>
         </select>
       </label>
       <label>
         Skill
         <select v-model="skillId" name="skillId" :disabled="taskId !== null">
           <option :value="null">No skill</option>
-          <option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skill.name }}</option>
+          <option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skillLabel(skill, skills) }}</option>
         </select>
       </label>
       <p v-if="taskId !== null">The skill is determined by the selected task.</p>
       <p v-if="session && (session.taskId === null && session.taskName || session.skillId === null && session.skillName)">
-        Deleted task/skill names remain in history unless you reassign the session.
+        Deleted task/skill names and paths remain in history unless you reassign the session.
       </p>
       <div class="session-actions">
         <button type="submit">{{ isSaving ? 'Saving...' : 'Save session' }}</button>
@@ -42,6 +43,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { createManualSession, editSession, type PomodoroLog, type Skill, type Task } from '../services/service'
+import { skillLabel } from '../services/skillLabels'
 
 const props = defineProps<{ session: PomodoroLog | null; tasks: Task[]; skills: Skill[] }>()
 const emit = defineEmits<{ saved: [session: PomodoroLog]; cancel: [] }>()
@@ -51,6 +53,10 @@ const taskId = ref<number | null>(null)
 const skillId = ref<number | null>(null)
 const isSaving = ref(false)
 const error = ref('')
+function taskSkillLabel(id: number | null | undefined) {
+  const skill = props.skills.find(item => item.id === id)
+  return skill ? skillLabel(skill, props.skills) : 'Unassigned'
+}
 
 function localDateTime(date: Date) {
   const pad = (value: number) => String(value).padStart(2, '0')

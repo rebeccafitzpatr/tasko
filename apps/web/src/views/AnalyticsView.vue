@@ -36,7 +36,8 @@
       <h2>Time spent per skill</h2>
       <ul class="skill-list">
         <li v-for="skill in skills" :key="skill.id" class="skill-card">
-          <div class="skill-title">{{ skill.name }}</div>
+          <div class="skill-title">{{ skillLabel(skill, skills) }}</div>
+          <p v-if="skill.parentId == null">Direct sessions plus sessions originally recorded under this parent's sub-skills. Do not add parent and sub-skill totals together.</p>
           <div class="skill-metrics">
             <span>{{ countTasksForSkill(skill.id) }} tasks</span>
             <span>{{ totalPomodorosForSkill(skill.id) }} Pomodoros</span>
@@ -82,7 +83,7 @@
           <tbody>
             <tr v-for="log in recentPomodoros" :key="log.id ?? log.completedAt + log.taskId">
               <td data-label="Task">{{ log.taskName ?? getTaskName(log.taskId) }}</td>
-              <td data-label="Skill">{{ log.skillName ?? getSkillName(log.skillId) }}</td>
+              <td data-label="Skill">{{ log.skillPath ?? log.skillName ?? getSkillName(log.skillId) }}</td>
               <td data-label="Duration">{{ log.duration }} min</td>
               <td data-label="Completed">{{ formatDateTime(log.completedAt) }}</td>
               <td data-label="Type">{{ log.type }}</td>
@@ -105,6 +106,7 @@ import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useAnalyticsStore } from '../stores/analyticsStore'
 import SessionEditor from '../components/SessionEditor.vue'
 import type { PomodoroLog, DateRange } from '../services/service'
+import { skillLabel } from '../services/skillLabels'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
@@ -238,7 +240,7 @@ function getTaskName(taskId: number | null | undefined) {
 }
 function getSkillName(skillId: number | null | undefined) {
   const skill = skills.value.find(s => s.id === skillId)
-  return skill ? skill.name : 'Unassigned / unavailable'
+  return skill ? skillLabel(skill, skills.value) : 'Unassigned / unavailable'
 }
 function formatDateTime(dt: string) {
   const d = new Date(dt)

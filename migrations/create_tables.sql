@@ -1,9 +1,11 @@
 CREATE TABLE IF NOT EXISTS skills (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL UNIQUE,
+  parent_id BIGINT NULL,
   minutes_spent BIGINT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_skills_parent FOREIGN KEY (parent_id) REFERENCES skills(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -26,6 +28,9 @@ CREATE TABLE IF NOT EXISTS pomodoro_logs (
   skill_id BIGINT,
   task_name_snapshot VARCHAR(255) NULL,
   skill_name_snapshot VARCHAR(255) NULL,
+  parent_skill_id_snapshot BIGINT NULL,
+  parent_skill_name_snapshot VARCHAR(255) NULL,
+  skill_path_snapshot VARCHAR(513) NULL,
   completion_id CHAR(36) NULL,
   completion_request VARCHAR(255) NULL,
   duration_minutes INT NOT NULL,

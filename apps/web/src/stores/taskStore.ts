@@ -14,6 +14,7 @@ export interface Task {
   createdAt?: string // ISO date
   updatedAt?: string // ISO date
   skillName?: string // Optional skill name for display purposes
+  skillPath?: string | null
   
 }
 
@@ -41,31 +42,17 @@ export const useTaskStore = defineStore('task', {
     async addTask(task: Task) {
       const newTask = await createTask(task.name, task.skillId ?? null);
       this.tasks.push(newTask);
+      useAnalyticsStore().invalidate()
     },
     async updateTask(updated: Task) {
-      //const idx = this.tasks.findIndex(t => t.id === updated.id)
-      //if (idx !== -1) this.tasks[idx] = { ...updated }
-      try {
-        const t = await updateTask(updated.id, updated);
-        const idx = this.tasks.findIndex(x => x.id === updated.id);
-        if (idx !== -1) this.tasks[idx] = t;
-      } catch (e) {
-        console.error(e);
-        // Optional: reconcile with backend to ensure consistency
-        await this.loadTasks();
-      }
+      const task = await updateTask(updated.id, updated);
+      const idx = this.tasks.findIndex(x => x.id === updated.id);
+      if (idx !== -1) this.tasks[idx] = { ...this.tasks[idx], ...task };
+      useAnalyticsStore().invalidate()
     },
     async deleteTask(id: number) {
-      const taskIndex = this.tasks.findIndex(task => task.id === id)
-      const deletedTask = taskIndex === -1 ? undefined : this.tasks[taskIndex]
-      if (taskIndex !== -1) this.tasks.splice(taskIndex, 1)
-
-      try {
-        await deleteTask(id);
-      } catch (e) {
-        if (deletedTask) this.tasks.splice(taskIndex, 0, deletedTask)
-        console.error(e);
-      }
+      await deleteTask(id);
+      this.tasks = this.tasks.filter(task => task.id !== id)
       useAnalyticsStore().invalidate()
     },
   },
