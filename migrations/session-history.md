@@ -1,5 +1,25 @@
 # Session history rules
 
+## Date-range analytics contract
+
+`GET /api/analytics/summary?start=2026-01-01&end=2026-01-31` returns
+`totalMinutes` (duration), `totalPomodoros` (session count, timer and manual),
+and a skill `breakdown` over **all** matching logs, independently of history
+pagination. `range` echoes the inclusive calendar boundaries and `timezone: "UTC"`;
+either boundary may be omitted. UTC midnight starts the first day and the
+exclusive midnight after the last day ends the range. Legacy timezone-unknown
+timestamps are compared as stored, without inventing an offset.
+
+Breakdown rows include current `parentId`, `parentName`, `skillPath`,
+`directMinutes` and `directPomodoros` for direct assignments. `minutes` and
+`pomodoros` also include historical sub-skill sessions whose saved parent ID
+matches the skill. Do not sum overlapping parent and child rollups: overall
+totals count every matching session exactly once, including unassigned and
+deleted-skill history. Empty ranges return zero totals and zero-valued rows for
+current skills. `totalTasks` always counts current tasks, not date-filtered tasks.
+No new migration is required after the existing session-history, timer-completion,
+and skill-hierarchy migrations.
+
 ## Optional skill hierarchy
 
 Apply `20261106_skill_hierarchy.sql` once after `20261105_session_history.sql` and
