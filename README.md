@@ -27,6 +27,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 - backend/index.ts — mount API routes and initialize DB (updated)
 - Session logs are the source of truth for time analytics; task and skill minute totals are compatibility counters.
 - Session validation, timestamp rules, deletion snapshots, and migration steps are documented in [migrations/session-history.md](./migrations/session-history.md).
+- Timer recovery and retry-safe completion require [20261106_timer_completion.sql](./migrations/20261106_timer_completion.sql) after the session-history migration, before deploying the updated app.
 
 ### Stores
 

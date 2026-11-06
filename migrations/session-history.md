@@ -23,3 +23,15 @@ WHERE duration_minutes < 1;
 Resolve any invalid rows deliberately before adding the check constraint; do not silently replace durations with invented values. Existing task/skill minute and Pomodoro counters are denormalized compatibility fields. They are not backfilled or used as the source for analytics because there is no reliable way to distinguish stale counters from independently edited values. New reports should aggregate session records.
 
 For a new database, use `create_tables.sql`. For an existing database, inspect invalid durations and apply `20261105_session_history.sql` once. The migration is not intended to be rerun.
+
+## Timer recovery and exactly-once recording
+
+Apply `20261106_timer_completion.sql` once after the session-history migration and before deploying the updated API/client. It adds a nullable UUID completion ID with a unique index and a saved request fingerprint. Existing and manual records keep null completion IDs; do not backfill invented IDs.
+
+The client generates a UUID v4 when a new timer starts and persists its task, duration, deadline, and completion identity in local storage under `tasko-timer-v1`. Pausing saves the remaining seconds; resuming keeps the same UUID and creates a new deadline. Reset cancels the timer and clears that identity without submitting a session. Old cached timers without a deadline cannot be safely resumed and show a recovery warning.
+
+An active timer's countdown is calculated from its deadline, not the number of interval callbacks, so refreshes and background throttling do not extend it. Reloading a still-active timer restores its task and countdown. If its deadline passed while the app was closed, or a completion request previously failed, it is restored as pending: startup itself does not POST a session. The user can save/retry or reset to discard it.
+
+Before POSTing a completion, the client must successfully persist the pending record. The API requires its UUID and atomically inserts the session and updates task/skill compatibility counters. Repeated or concurrent requests with the same UUID return the existing session without another insert or counter increment. Reusing the UUID with a different task or duration returns HTTP 409. A retry still returns the original session after its task has been deleted.
+
+Failures to save locally or on the API are displayed in the timer view. Pending completions retain their UUID across reloads so a lost HTTP response can be retried safely. A reporting refresh failure is shown separately as "Session saved" and does not trigger another completion request. Timer recovery requires browser storage; clearing it removes local progress. This does not implement cross-device recovery.

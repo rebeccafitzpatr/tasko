@@ -6,6 +6,7 @@ export interface CreateSessionInput {
   duration: number
   type: SessionType
   completedAt: string | null
+  completionId: string | null
 }
 
 export type SessionInputResult =
@@ -63,6 +64,11 @@ export function validateCreateSessionInput(body: unknown): SessionInputResult {
   if (input.type === 'timer' && taskId === null) {
     return { error: 'taskId is required for timer sessions.' }
   }
+  if (input.type === 'timer' &&
+      (typeof input.completionId !== 'string' ||
+       !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.completionId))) {
+    return { error: 'Timer sessions require a UUID v4 completionId.' }
+  }
 
   if (input.type === 'manual') {
     if (!isIsoTimestamp(input.completedAt)) {
@@ -80,6 +86,7 @@ export function validateCreateSessionInput(body: unknown): SessionInputResult {
       duration: Number(input.duration),
       type: input.type,
       completedAt: input.type === 'manual' ? input.completedAt as string : null,
+      completionId: input.type === 'timer' ? String(input.completionId).toLowerCase() : null,
     },
   }
 }

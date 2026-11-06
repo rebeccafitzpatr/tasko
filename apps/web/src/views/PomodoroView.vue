@@ -29,7 +29,7 @@
               v-model.number="duration"
               min="1"
               max="60"
-              @change="updateDuration"
+              :disabled="pomodoroStore.pendingCompletion || pomodoroStore.isSaving"
             />
             <span class="duration-unit">min</span>
           </div>
@@ -45,7 +45,7 @@
           <CustomSelect
             v-model="selectedTaskId"
             placeholder="Select task"
-            :disabled="isRunning"
+            :disabled="isRunning || pomodoroStore.pendingCompletion || pomodoroStore.isSaving"
             :options="
               tasks.map(task => ({
                 value: task.id,
@@ -58,12 +58,24 @@
 
         <p v-if="startError" class="start-error" role="alert">{{ startError }}</p>
         <p v-if="pomodoroStore.completionError" class="start-error" role="alert">
-          Could not save session: {{ pomodoroStore.completionError }}
+          {{ pomodoroStore.completionError }}
+        </p>
+        <p v-if="pomodoroStore.persistenceError" class="start-error" role="alert">
+          {{ pomodoroStore.persistenceError }}
+        </p>
+        <p v-if="pomodoroStore.refreshError" class="start-error" role="alert">
+          {{ pomodoroStore.refreshError }}
+        </p>
+        <p v-if="pomodoroStore.pendingCompletion && !pomodoroStore.completionError">
+          Timer finished. Save the completed session when ready.
         </p>
         <div class="timer-controls">
-          <button @click="start" :disabled="isRunning">Start</button>
+          <button @click="start" :disabled="isRunning || pomodoroStore.pendingCompletion || pomodoroStore.isSaving">Start</button>
           <button @click="pause" :disabled="!isRunning">Pause</button>
-          <button @click="reset">Reset</button>
+          <button @click="reset" :disabled="pomodoroStore.isSaving">Reset</button>
+          <button v-if="pomodoroStore.pendingCompletion" @click="pomodoroStore.saveCompletion()" :disabled="pomodoroStore.isSaving">
+            {{ pomodoroStore.isSaving ? 'Saving...' : 'Save / retry session' }}
+          </button>
         </div>
       </section>
       
@@ -72,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useTaskStore } from '../stores/taskStore'
 import TimerCircle from '../components/TimerCircle.vue'
@@ -83,22 +95,22 @@ const pomodoroStore = usePomodoroStore()
 const taskStore = useTaskStore()
 //const skillStore = useSkillStore()
 
-const tasks = taskStore.tasks
+const tasks = computed(() => taskStore.tasks)
 const isRunning = computed(() => pomodoroStore.isRunning)
 const sessionTypeLabel = computed(() => pomodoroStore.sessionType === 'work' ? 'Work' : 'Break')
 
-const selectedTaskId = ref<number | null>(null)
-const duration = ref(pomodoroStore.duration)
+const selectedTaskId = computed({
+  get: () => pomodoroStore.currentTaskId,
+  set: (value: number | null) => pomodoroStore.selectTask(value),
+})
+const duration = computed({
+  get: () => pomodoroStore.duration,
+  set: (value: number) => pomodoroStore.setDuration(value),
+})
 const startError = ref('')
 
 const minutes = computed(() => String(Math.floor(pomodoroStore.timeLeft / 60)).padStart(2, '0'))
 const seconds = computed(() => String(pomodoroStore.timeLeft % 60).padStart(2, '0'))
-
-function updateDuration() {
-  if (!isRunning.value && duration.value >= 1 && duration.value <= 60) {
-    pomodoroStore.setDuration(duration.value)
-  }
-}
 
 function start() {
   if (pomodoroStore.isRunning) return
@@ -119,8 +131,6 @@ function clearStartError() {
 
 function reset() {
   pomodoroStore.reset()
-  selectedTaskId.value = null
-  duration.value = pomodoroStore.duration
   startError.value = ''
 }
 
@@ -128,8 +138,12 @@ function pause() {
   pomodoroStore.pause()
 }
 
-onUnmounted(() => {
-  //pomodoroStore.cleanup()   //do not cleanup every time we navigate away.
+onMounted(async () => {
+  try {
+    await taskStore.loadTasks()
+  } catch (error) {
+    startError.value = error instanceof Error ? error.message : 'Cannot load tasks.'
+  }
 })
 </script>
 

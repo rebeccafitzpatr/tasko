@@ -1,8 +1,21 @@
 import { Router } from 'express'
+import { SQL } from 'bun'
 import { db } from './db.js' // uses the db.ts export
 import { validateCreateSessionInput } from './sessionRules.js'
 
 const router = Router();
+
+async function findCompletion(completionId: string) {
+  const rows = await db`
+    SELECT id, task_id AS taskId, skill_id AS skillId,
+           task_name_snapshot AS taskName, skill_name_snapshot AS skillName,
+           duration_minutes AS duration,
+           DATE_FORMAT(completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completedAt,
+           type, completion_id AS completionId, completion_request AS completionRequest
+    FROM pomodoro_logs WHERE completion_id = ${completionId}
+  `
+  return rows[0]
+}
 
 // Skills
 
@@ -120,8 +133,19 @@ router.post('/pomodoros', async (req, res) => {
     return res.status(400).json({ error: validation.error })
   }
 
-  const { taskId, skillId: requestedSkillId, duration, type } = validation.value
+  const { taskId, skillId: requestedSkillId, duration, type, completionId } = validation.value
+  const completionRequest = completionId ? JSON.stringify({ taskId, duration, type }) : null
   try {
+    if (completionId) {
+      const existing = await findCompletion(completionId)
+      if (existing) {
+        const { completionRequest: savedRequest, ...savedSession } = existing
+        if (savedRequest !== completionRequest) {
+          return res.status(409).json({ error: 'completionId was already used for another session.' })
+        }
+        return res.status(200).json(savedSession)
+      }
+    }
     let taskName: string | null = null
     let skillName: string | null = null
     let canonicalSkillId = requestedSkillId
@@ -156,15 +180,18 @@ router.post('/pomodoros', async (req, res) => {
     const completedAt = type === 'timer'
       ? new Date()
       : new Date(validation.value.completedAt as string)
+    completedAt.setMilliseconds(0)
     const completedAtUtc = completedAt.toISOString().slice(0, 19).replace('T', ' ')
     const session = await db.begin(async (transaction) => {
       await transaction`
         INSERT INTO pomodoro_logs
           (task_id, skill_id, task_name_snapshot, skill_name_snapshot,
-           duration_minutes, completed_at, completed_at_is_utc, type)
+           duration_minutes, completed_at, completed_at_is_utc, type,
+           completion_id, completion_request)
         VALUES
           (${taskId}, ${canonicalSkillId}, ${taskName}, ${skillName},
-           ${duration}, ${completedAtUtc}, TRUE, ${type})
+           ${duration}, ${completedAtUtc}, TRUE, ${type},
+           ${completionId}, ${completionRequest})
       `
       if (taskId !== null) {
         await transaction`
@@ -172,6 +199,12 @@ router.post('/pomodoros', async (req, res) => {
           SET completed_pomodoros = COALESCE(completed_pomodoros, 0) + 1,
               minutes_spent = COALESCE(minutes_spent, 0) + ${duration}
           WHERE id = ${taskId}
+        `
+      }
+      if (canonicalSkillId !== null) {
+        await transaction`
+          UPDATE skills SET minutes_spent = COALESCE(minutes_spent, 0) + ${duration}
+          WHERE id = ${canonicalSkillId}
         `
       }
       const rows = await transaction`SELECT LAST_INSERT_ID() AS id`
@@ -184,10 +217,23 @@ router.post('/pomodoros', async (req, res) => {
       taskName,
       skillName,
       duration,
-      completedAt: completedAt.toISOString(),
+      completedAt: completedAt.toISOString().replace('.000Z', 'Z'),
       type,
+      completionId,
     })
   } catch (e) {
+    if (completionId && e instanceof SQL.MySQLError && e.errno === 1062) {
+      try {
+        const existing = await findCompletion(completionId)
+        if (existing && existing.completionRequest === completionRequest) {
+          const { completionRequest: _savedRequest, ...savedSession } = existing
+          return res.status(200).json(savedSession)
+        }
+        return res.status(409).json({ error: 'completionId conflicts with an existing session.' })
+      } catch (lookupError) {
+        return res.status(500).json({ error: (lookupError as Error).message })
+      }
+    }
     res.status(500).json({ error: (e as Error).message })
   }
 })

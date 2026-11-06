@@ -8,6 +8,7 @@ describe('validateCreateSessionInput', () => {
       taskId: 12,
       skillId: 4,
       duration: 25,
+      completionId: '00000000-0000-4000-8000-000000000001',
     })).toEqual({
       value: {
         type: 'timer',
@@ -15,6 +16,7 @@ describe('validateCreateSessionInput', () => {
         skillId: 4,
         duration: 25,
         completedAt: null,
+        completionId: '00000000-0000-4000-8000-000000000001',
       },
     })
   })
@@ -40,6 +42,8 @@ describe('validateCreateSessionInput', () => {
     [{ type: 'timer', taskId: 1, duration: 1.5 }, 'duration'],
     [{ type: 'timer', taskId: null, duration: 25 }, 'taskId'],
     [{ type: 'unknown', taskId: 1, duration: 25 }, 'type'],
+    [{ type: 'timer', taskId: 1, duration: 25 }, 'completionId'],
+    [{ type: 'timer', taskId: 1, duration: 25, completionId: 'invalid' }, 'completionId'],
     [{ type: 'manual', duration: 25 }, 'completedAt'],
     [{ type: 'manual', duration: 25, completedAt: '2026-02-30T12:00:00Z' }, 'completedAt'],
     [{ type: 'manual', duration: 25, completedAt: '2099-01-01T00:00:00Z' }, 'future'],
