@@ -37,6 +37,9 @@ export type AnalyticsSummary = {
     skillName?: string
     pomodoros?: number
     minutes?: number
+    todayMinutes?: number
+    weekMinutes?: number
+    yearMinutes?: number
   }>;
 };
 
@@ -125,9 +128,36 @@ export async function addPomodoro(taskId: number, duration: number, completionId
   });
   return handleResponse<PomodoroLog>(res);
 }
-export async function fetchPomodoros(): Promise<PomodoroLog[]> {
-  const res = await fetch(`${API_BASE}/pomodoros`);
-  return handleResponse<PomodoroLog[]>(res);
+export interface DateRange {
+  start?: string;
+  end?: string;
+}
+
+export interface HistoryOptions extends DateRange {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface SessionPage {
+  items: PomodoroLog[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  limit: number;
+}
+
+function rangeParams(range: DateRange) {
+  const params = new URLSearchParams();
+  if (range.start) params.set('start', range.start);
+  if (range.end) params.set('end', range.end);
+  return params;
+}
+
+export async function fetchPomodoros(options: HistoryOptions = {}): Promise<SessionPage> {
+  const params = rangeParams(options);
+  if (options.limit !== undefined) params.set('limit', String(options.limit));
+  if (options.cursor) params.set('cursor', options.cursor);
+  const res = await fetch(`${API_BASE}/pomodoros?${params}`);
+  return handleResponse<SessionPage>(res);
 }
 
 export interface SessionDetails {
@@ -156,7 +186,7 @@ export async function editSession(id: number, details: SessionDetails): Promise<
 }
 
 // Analytics (optional)
-export async function fetchAnalytics(): Promise<AnalyticsSummary> {
-  const res = await fetch(`${API_BASE}/analytics/summary`);
+export async function fetchAnalytics(range: DateRange = {}): Promise<AnalyticsSummary> {
+  const res = await fetch(`${API_BASE}/analytics/summary?${rangeParams(range)}`);
   return handleResponse<AnalyticsSummary>(res);
 }

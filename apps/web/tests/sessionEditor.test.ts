@@ -39,7 +39,7 @@ beforeEach(() => {
   vi.mocked(editSession).mockResolvedValue({ ...manual, duration: 45 })
   vi.mocked(fetchTasks).mockResolvedValue(tasks)
   vi.mocked(fetchSkills).mockResolvedValue(skills)
-  vi.mocked(fetchPomodoros).mockResolvedValue([])
+  vi.mocked(fetchPomodoros).mockResolvedValue({ items: [], hasMore: false, nextCursor: null, limit: 25 })
   vi.mocked(fetchAnalytics).mockResolvedValue({
     totalPomodoros: 0, totalMinutes: 0, totalTasks: 1,
     breakdown: [{ skillId: 4, skillName: 'English', minutes: 0, pomodoros: 0 }],
@@ -144,7 +144,7 @@ describe('session history and analytics refresh', () => {
   it('refreshes displayed records and totals after a manual save and an edit', async () => {
     const wrapper = await analytics()
     await wrapper.findAll('button').find(button => button.text() === 'Add manual session')!.trigger('click')
-    vi.mocked(fetchPomodoros).mockResolvedValue([manual])
+    vi.mocked(fetchPomodoros).mockResolvedValue({ items: [manual], hasMore: false, nextCursor: null, limit: 25 })
     vi.mocked(fetchAnalytics).mockResolvedValue({ totalPomodoros: 1, totalMinutes: 30, totalTasks: 1 })
     await wrapper.getComponent(SessionEditor).get('form').trigger('submit')
     await flushPromises()
@@ -152,7 +152,7 @@ describe('session history and analytics refresh', () => {
     expect(wrapper.find('.analytics-summary').text()).toContain('30 min')
     await wrapper.findAll('button').find(button => button.text() === 'Edit')!.trigger('click')
     await wrapper.getComponent(SessionEditor).get('[name="duration"]').setValue(45)
-    vi.mocked(fetchPomodoros).mockResolvedValue([{ ...manual, duration: 45 }])
+    vi.mocked(fetchPomodoros).mockResolvedValue({ items: [{ ...manual, duration: 45 }], hasMore: false, nextCursor: null, limit: 25 })
     vi.mocked(fetchAnalytics).mockResolvedValue({ totalPomodoros: 1, totalMinutes: 45, totalTasks: 1 })
     await wrapper.getComponent(SessionEditor).get('form').trigger('submit')
     await flushPromises()
@@ -173,5 +173,81 @@ describe('session history and analytics refresh', () => {
     expect(wrapper.text()).toContain('Retry loading')
     expect(wrapper.findComponent(SessionEditor).exists()).toBe(false)
     expect(createManualSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('browses older/newer pages without changing complete skill aggregates', async () => {
+    vi.mocked(fetchPomodoros).mockResolvedValueOnce({
+      items: [{ ...manual, taskName: 'Latest session' }], hasMore: true, nextCursor: 'older-cursor', limit: 25,
+    })
+    vi.mocked(fetchAnalytics).mockResolvedValue({
+      totalPomodoros: 235, totalMinutes: 235, totalTasks: 1,
+      breakdown: [{ skillId: 4, minutes: 235, pomodoros: 235, todayMinutes: 140, weekMinutes: 200, yearMinutes: 235 }],
+    })
+    const wrapper = await analytics()
+    vi.mocked(fetchPomodoros).mockResolvedValueOnce({
+      items: [{ ...manual, id: 2, taskName: 'Older session' }], hasMore: false, nextCursor: null, limit: 25,
+    })
+    await wrapper.findAll('button').find(button => button.text() === 'Older sessions')!.trigger('click')
+    await flushPromises()
+    expect(fetchPomodoros).toHaveBeenLastCalledWith({ limit: 25, cursor: 'older-cursor' })
+    expect(wrapper.find('tbody').text()).toContain('Older session')
+    expect(wrapper.text()).toContain('Page 2')
+    expect(wrapper.find('.skill-metrics').text()).toContain('235 min')
+    expect(wrapper.find('.skill-periods').text()).toContain('140')
+    expect(wrapper.findAll('button').find(button => button.text() === 'Older sessions')!.attributes('disabled')).toBeDefined()
+    vi.mocked(fetchPomodoros).mockResolvedValueOnce({
+      items: [manual], hasMore: true, nextCursor: 'older-cursor', limit: 25,
+    })
+    await wrapper.findAll('button').find(button => button.text() === 'Newer sessions')!.trigger('click')
+    await flushPromises()
+    expect(fetchPomodoros).toHaveBeenLastCalledWith({ limit: 25, cursor: undefined })
+    expect(wrapper.text()).toContain('Page 1')
+    expect(fetchAnalytics).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows loading and errors, preserves the current page and retries failed navigation', async () => {
+    vi.mocked(fetchPomodoros).mockResolvedValueOnce({
+      items: [manual], hasMore: true, nextCursor: 'cursor', limit: 25,
+    })
+    const wrapper = await analytics()
+    let rejectPage!: (error: Error) => void
+    vi.mocked(fetchPomodoros).mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectPage = reject }))
+    await wrapper.findAll('button').find(button => button.text() === 'Older sessions')!.trigger('click')
+    expect(wrapper.text()).toContain('Loading sessions...')
+    expect(wrapper.findAll('button').find(button => button.text() === 'Older sessions')!.attributes('disabled')).toBeDefined()
+    rejectPage(new Error('History unavailable'))
+    await flushPromises()
+    expect(wrapper.find('tbody').text()).toContain('30 min')
+    expect(wrapper.get('[role="alert"]').text()).toContain('History unavailable')
+    vi.mocked(fetchPomodoros).mockResolvedValueOnce({ items: [], hasMore: false, nextCursor: null, limit: 25 })
+    await wrapper.findAll('button').find(button => button.text() === 'Retry history')!.trigger('click')
+    await flushPromises()
+    expect(fetchPomodoros).toHaveBeenLastCalledWith({ limit: 25, cursor: 'cursor' })
+    expect(wrapper.text()).toContain('Page 2')
+    expect(wrapper.text()).toContain('No sessions match these dates.')
+  })
+
+  it('applies inclusive date filters to history and aggregates and resets navigation', async () => {
+    const wrapper = await analytics()
+    await wrapper.get('[name="start"]').setValue('2026-01-01')
+    await wrapper.get('[name="end"]').setValue('2026-01-31')
+    await wrapper.get('.history-filters').trigger('submit')
+    await flushPromises()
+    expect(fetchPomodoros).toHaveBeenLastCalledWith({
+      start: '2026-01-01', end: '2026-01-31', limit: 25, cursor: undefined,
+    })
+    expect(fetchAnalytics).toHaveBeenLastCalledWith({ start: '2026-01-01', end: '2026-01-31' })
+    await wrapper.findAll('button').find(button => button.text() === 'All dates')!.trigger('click')
+    await flushPromises()
+    expect(fetchPomodoros).toHaveBeenLastCalledWith({ start: undefined, end: undefined, limit: 25, cursor: undefined })
+  })
+
+  it('rejects reversed dates without requesting another page', async () => {
+    const wrapper = await analytics()
+    await wrapper.get('[name="start"]').setValue('2026-02-01')
+    await wrapper.get('[name="end"]').setValue('2026-01-01')
+    await wrapper.get('.history-filters').trigger('submit')
+    expect(wrapper.get('[role="alert"]').text()).toContain('Start date')
+    expect(fetchPomodoros).toHaveBeenCalledTimes(1)
   })
 })

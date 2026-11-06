@@ -2,6 +2,8 @@ import { Router } from 'express'
 import { SQL, type TransactionSQL } from 'bun'
 import { db } from './db.js' // uses the db.ts export
 import { validateCreateSessionInput, validateEditSessionInput } from './sessionRules.js'
+import { parseHistoryQuery, historyCursor } from './historyQuery.js'
+import type { PomodoroLog } from './types.js'
 
 const router = Router();
 
@@ -310,9 +312,12 @@ router.put('/pomodoros/:id', async (req, res) => {
   }
 })
 
-router.get('/pomodoros', async (_req, res) => {
+router.get('/pomodoros', async (req, res) => {
+  const parsed = parseHistoryQuery(req.query)
+  if ('error' in parsed) return res.status(400).json({ error: parsed.error })
+  const { limit, start, end, beforeTime, beforeId } = parsed.value
   try {
-    const logs = await db`
+    const logs: (PomodoroLog & { cursorTime: string })[] = await db`
       SELECT
         pl.id,
         pl.task_id AS taskId,
@@ -324,45 +329,83 @@ router.get('/pomodoros', async (_req, res) => {
           WHEN pl.completed_at_is_utc THEN DATE_FORMAT(pl.completed_at, '%Y-%m-%dT%H:%i:%sZ')
           ELSE DATE_FORMAT(pl.completed_at, '%Y-%m-%d %H:%i:%s')
         END AS completedAt,
-        pl.type
+        pl.type,
+        DATE_FORMAT(pl.completed_at, '%Y-%m-%d %H:%i:%s') AS cursorTime
       FROM pomodoro_logs pl
       LEFT JOIN tasks t ON t.id = pl.task_id
       LEFT JOIN skills s ON s.id = pl.skill_id
+      WHERE (${start} IS NULL OR pl.completed_at >= ${start})
+        AND (${end} IS NULL OR pl.completed_at < ${end})
+        AND (${beforeTime} IS NULL OR pl.completed_at < ${beforeTime}
+          OR (pl.completed_at = ${beforeTime} AND pl.id < ${beforeId}))
       ORDER BY pl.completed_at DESC, pl.id DESC
-      LIMIT 100
+      LIMIT ${limit + 1}
     `
-    res.json(logs)
+    const hasMore = logs.length > limit
+    const page = logs.slice(0, limit)
+    const last = page[page.length - 1]
+    res.json({
+      items: page.map(({ cursorTime: _time, ...log }) => log),
+      hasMore,
+      nextCursor: hasMore && last ? historyCursor(last.cursorTime, Number(last.id), parsed.value) : null,
+      limit,
+    })
   } catch (e) {
     res.status(500).json({ error: (e as Error).message })
   }
 })
 
-router.get('/analytics/summary', async (_req, res) => {
+router.get('/analytics/summary', async (req, res) => {
+  const parsed = parseHistoryQuery({ start: req.query.start, end: req.query.end })
+  if ('error' in parsed) return res.status(400).json({ error: parsed.error })
+  const { start, end } = parsed.value
+  const now = new Date()
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const week = new Date(today)
+  week.setUTCDate(week.getUTCDate() - week.getUTCDay())
+  const year = new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
+  const sqlTime = (date: Date) => date.toISOString().slice(0, 19).replace('T', ' ')
+  const todayStart = sqlTime(today)
+  const weekStart = sqlTime(week)
+  const yearStart = sqlTime(year)
+  const nowTime = sqlTime(now)
   try {
-    const totalPomodoros = (await db`
-      SELECT COUNT(*) AS c FROM pomodoro_logs
-    `)[0]?.c ?? 0;
-    const totalMinutes = (await db`
-      SELECT COALESCE(SUM(duration_minutes), 0) AS m FROM pomodoro_logs
-    `)[0]?.m ?? 0;
+    const totals = (await db`
+      SELECT COUNT(*) AS c, COALESCE(SUM(duration_minutes), 0) AS m FROM pomodoro_logs
+      WHERE (${start} IS NULL OR completed_at >= ${start})
+        AND (${end} IS NULL OR completed_at < ${end})
+    `)[0];
     const totalTasks = (await db`SELECT COUNT(*) AS c FROM tasks`)[0]?.c ?? 0;
 
     // Optional: per-skill breakdown (if you want to surface this too)
-    const breakdown: { skillId: number; skillName: string; pomodoros: number; minutes: number }[] = await db`
+    const breakdown: {
+      skillId: number; skillName: string; pomodoros: number; minutes: number;
+      todayMinutes: number; weekMinutes: number; yearMinutes: number
+    }[] = await db`
       SELECT s.id AS skillId, s.name AS skillName,
              COUNT(pl.id) AS pomodoros,
-             COALESCE(SUM(pl.duration_minutes), 0) AS minutes
+             COALESCE(SUM(pl.duration_minutes), 0) AS minutes,
+             COALESCE(SUM(CASE WHEN pl.completed_at >= ${todayStart} AND pl.completed_at <= ${nowTime}
+               THEN pl.duration_minutes ELSE 0 END), 0) AS todayMinutes,
+             COALESCE(SUM(CASE WHEN pl.completed_at >= ${weekStart} AND pl.completed_at <= ${nowTime}
+               THEN pl.duration_minutes ELSE 0 END), 0) AS weekMinutes,
+             COALESCE(SUM(CASE WHEN pl.completed_at >= ${yearStart} AND pl.completed_at <= ${nowTime}
+               THEN pl.duration_minutes ELSE 0 END), 0) AS yearMinutes
       FROM skills s
       LEFT JOIN pomodoro_logs pl ON pl.skill_id = s.id
+        AND (${start} IS NULL OR pl.completed_at >= ${start})
+        AND (${end} IS NULL OR pl.completed_at < ${end})
       GROUP BY s.id, s.name
     `;
 
-    res.json({ totalPomodoros: Number(totalPomodoros),
-      totalMinutes: Number(totalMinutes),
+    res.json({ totalPomodoros: Number(totals?.c ?? 0),
+      totalMinutes: Number(totals?.m ?? 0),
       totalTasks: Number(totalTasks),
       breakdown: breakdown.map(row => ({
         skillId: Number(row.skillId), skillName: row.skillName,
         pomodoros: Number(row.pomodoros), minutes: Number(row.minutes),
+        todayMinutes: Number(row.todayMinutes), weekMinutes: Number(row.weekMinutes),
+        yearMinutes: Number(row.yearMinutes),
       }))
     });
   } catch (e) {

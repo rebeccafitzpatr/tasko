@@ -10,6 +10,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 - assign tasks to skills, so all pomodoro session times go towards skills
 - get a deep dive into your stats and analytics !
 - add manual study sessions and edit recorded sessions from Analytics, with optional task/skill assignments
+- browse paginated session history and filter by inclusive UTC dates; analytics aggregate all matching sessions, not just the displayed page
 
 ## To be added:
 
