@@ -12,6 +12,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 - get a deep dive into your stats and analytics !
 - add manual study sessions and edit recorded sessions from Analytics, with optional task/skill assignments
 - browse paginated session history and filter by inclusive UTC dates; analytics aggregate all matching sessions, not just the displayed page
+- select common UTC periods or custom dates and compare totals/skills with the prior equal-length period
 
 ## To be added:
 
