@@ -6,19 +6,17 @@
     <button v-if="loadError" :disabled="isRefreshing" @click="loadData(true)">Retry loading</button>
     <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
     <form class="history-filters" @submit.prevent="applyRange">
-      <label>Period (UTC)
+      <label>Period (NZ)
         <select v-model="selectedPeriod" name="period" :disabled="rangeBusy" @change="choosePeriod">
           <option v-for="period in reportPeriods" :key="period.value" :value="period.value">{{ period.label }}</option>
         </select>
       </label>
-      <label>Start date (UTC)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
-      <label>End date (UTC)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
+      <label>Start date (NZ)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
+      <label>End date (NZ)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
       <button :disabled="rangeBusy">Apply dates</button>
       <button type="button" :disabled="rangeBusy" @click="clearRange">All dates</button>
     </form>
     <p v-if="rangeError" role="alert">{{ rangeError }}</p>
-    <p>Session totals: {{ appliedRange.start || 'all history' }} to {{ appliedRange.end || 'latest' }}.
-      Task count includes all current tasks. Period figures use UTC (weeks start Sunday) within these dates.</p>
     <label class="compare-toggle"><input v-model="compareEnabled" name="compare" type="checkbox" :disabled="rangeBusy" @change="loadComparison" />
       Compare with the prior equal-length period</label>
     <section v-if="compareEnabled" class="comparison card" aria-label="Prior period comparison">
@@ -27,7 +25,7 @@
       <button v-if="comparisonError" :disabled="comparisonLoading" @click="loadComparison">Retry comparison</button>
       <p v-if="comparisonUnavailable">{{ comparisonUnavailable }}</p>
       <template v-if="priorSummary && analyticsMatchesRange && !comparisonLoading">
-        <h2>Prior period: {{ priorRange?.start }} to {{ priorRange?.end }} (UTC)</h2>
+        <h2>Prior period: {{ priorRange?.start }} to {{ priorRange?.end }}</h2>
         <p v-if="priorSummary.totalPomodoros === 0">No sessions in the prior period.</p>
         <div class="comparison-totals">
           <p>Prior time: {{ priorSummary.totalMinutes ?? 0 }} min.
@@ -61,16 +59,15 @@
       <ul class="skill-list">
         <li v-for="skill in skills" :key="skill.id" class="skill-card">
           <div class="skill-title">{{ skillLabel(skill, skills) }}</div>
-          <p v-if="skill.parentId == null">Direct sessions plus sessions originally recorded under this parent's sub-skills. Do not add parent and sub-skill totals together.</p>
           <div class="skill-metrics">
             <span>{{ countTasksForSkill(skill.id) }} tasks</span>
             <span>{{ totalPomodorosForSkill(skill.id) }} sessions</span>
             <span>{{ totalMinutesForSkill(skill.id) }} min</span>
           </div>
           <div class="skill-periods">
-            <span>Today (UTC): <b>{{ skillSummary(skill.id)?.todayMinutes ?? 0 }}</b> min</span>
-            <span>This week (UTC): <b>{{ skillSummary(skill.id)?.weekMinutes ?? 0 }}</b> min</span>
-            <span>This year (UTC): <b>{{ skillSummary(skill.id)?.yearMinutes ?? 0 }}</b> min</span>
+            <span>Today: <b>{{ skillSummary(skill.id)?.todayMinutes ?? 0 }}</b> min</span>
+            <span>This week: <b>{{ skillSummary(skill.id)?.weekMinutes ?? 0 }}</b> min</span>
+            <span>This year: <b>{{ skillSummary(skill.id)?.yearMinutes ?? 0 }}</b> min</span>
           </div>
           <p v-if="compareEnabled && priorSummary && !comparisonLoading" class="skill-comparison">
             Prior: {{ priorSkillSummary(skill.id)?.minutes ?? 0 }} min / {{ priorSkillSummary(skill.id)?.pomodoros ?? 0 }} sessions.
@@ -82,21 +79,20 @@
     </div>
     <div class="card">
       <h2>Session history</h2>
-      <button :disabled="rangeBusy" @click="exportSessions">{{ isExporting ? 'Exporting...' : 'Export CSV' }}</button>
-      <p>CSV exports all sessions in the applied date range, including older pages.</p>
+      <div class="history-actions">
+        <button :disabled="rangeBusy" @click="openEditor(null)">Add manual session</button>
+        <button :disabled="rangeBusy" @click="exportSessions">{{ isExporting ? 'Exporting...' : 'Export CSV' }}</button>
+      </div>
       <p v-if="isExporting" role="status">Exporting all matching sessions...</p>
       <p v-if="exportMessage" role="status">{{ exportMessage }}</p>
       <p v-if="exportError" role="alert">{{ exportError }} Retry with Export CSV.</p>
-      <button :disabled="isRefreshing || historyLoading || editorOpen" @click="openEditor(null)">Add manual session</button>
       <SessionEditor v-if="editorOpen" :session="editingSession" :tasks="tasks" :skills="skills"
         @saved="sessionSaved" @cancel="editorOpen = false" />
       <p v-if="historyLoading" role="status">Loading sessions...</p>
       <p v-if="historyError" role="alert">{{ historyError }}</p>
       <button v-if="historyError" :disabled="historyLoading || isRefreshing" @click="retryHistory">Retry history</button>
-      <p v-if="!historyLoading && !historyError">Page {{ previousCursors.length + 1 }}: {{ recentPomodoros.length }} sessions.
-        {{ pomodoroStore.historyHasMore ? 'Older sessions available.' : 'End of history.' }}</p>
       <p v-if="!historyLoading && !historyError && recentPomodoros.length === 0">No sessions match these dates.</p>
-      <div class="history-navigation">
+      <div class="history-navigation" v-if="previousCursors.length > 0 || pomodoroStore.historyHasMore">
         <button :disabled="isRefreshing || historyLoading || editorOpen || previousCursors.length === 0"
           @click="loadHistory(previousCursors[previousCursors.length - 1] ?? null, 'previous')">Newer sessions</button>
         <button :disabled="isRefreshing || historyLoading || editorOpen || !pomodoroStore.historyHasMore"
@@ -104,14 +100,20 @@
       </div>
       <div class="table-responsive">
         <table class="analytics-table">
+          <colgroup>
+            <col class="col-task" />
+            <col class="col-skill" />
+            <col class="col-duration" />
+            <col class="col-completed" />
+            <col class="col-actions" />
+          </colgroup>
           <thead>
             <tr>
-              <th>Task</th>
-              <th>Skill</th>
-              <th>Duration (min)</th>
-              <th>Completed At</th>
-              <th>Type</th>
-              <th>Actions</th>
+              <th scope="col">Task</th>
+              <th scope="col">Skill</th>
+              <th scope="col">Duration</th>
+              <th scope="col">Completed</th>
+              <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -120,7 +122,6 @@
               <td data-label="Skill">{{ log.skillPath ?? log.skillName ?? getSkillName(log.skillId) }}</td>
               <td data-label="Duration">{{ log.duration }} min</td>
               <td data-label="Completed">{{ formatDateTime(log.completedAt) }}</td>
-              <td data-label="Type">{{ log.type }}</td>
               <td data-label="Actions">
                 <button :disabled="isRefreshing || historyLoading || editorOpen || log.id == null" @click="openEditor(log)">Edit</button>
               </td>
@@ -143,6 +144,7 @@ import { exportHistory, fetchAnalytics, type AnalyticsSummary, type PomodoroLog,
 import { skillLabel } from '../services/skillLabels'
 import { reportPeriods, periodRange, previousRange, validateReportRange, comparisonChange, type ReportPeriod } from '../services/reportPeriods'
 import { downloadHistory } from '../services/historyDownload'
+import { formatNzDateTime } from '../services/timeZone'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
@@ -358,18 +360,15 @@ function getSkillName(skillId: number | null | undefined) {
   return skill ? skillLabel(skill, skills.value) : 'Unassigned / unavailable'
 }
 function formatDateTime(dt: string) {
-  const d = new Date(dt)
-  return d.toLocaleString()
+  return formatNzDateTime(dt)
 }
 
-const recentPomodoros = computed(() =>
-  pomodoroStore.pomodoroLog,
-)
+const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
 // ...existing script code...
 </script>
 
 <style scoped>
-.history-filters, .history-navigation {
+.history-filters, .history-navigation, .history-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
@@ -507,9 +506,19 @@ const recentPomodoros = computed(() =>
   padding: 0.6rem 0.75rem;
   border-bottom: 1px solid var(--border);
   text-align: left;
+  vertical-align: middle;
 }
 
+.col-duration { width: 6.5rem; }
+.col-actions { width: 6rem; }
+
+.analytics-table td button { white-space: nowrap; }
+
 .analytics-table th {
+  overflow-wrap: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text-on-accent);
   background: var(--theme-color);
 }

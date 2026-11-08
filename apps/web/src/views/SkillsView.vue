@@ -1,7 +1,6 @@
 <template>
   <div>
     <h1>Skills</h1>
-    <p>Skills can stand alone or have one level of sub-skills. Move or remove sub-skills before deleting a parent.</p>
     <form class="details" @submit.prevent="save">
       <label>Skill name <input v-model="name" name="skillName" placeholder="Skill name" :disabled="busy" /></label>
       <label>Parent skill
@@ -21,18 +20,27 @@
       <ul>
         <li v-for="parent in topLevelSkills" :key="parent.id">
           <div class="task-item">
-            <strong>{{ parent.name }}</strong>
-            <span>{{ children(parent.id).length ? 'Parent skill' : 'Standalone skill' }}</span>
-            <button :disabled="busy" @click="edit(parent)">Edit</button>
-            <button :disabled="busy" @click="addChild(parent.id)">Add sub-skill</button>
-            <button :disabled="busy || children(parent.id).length > 0" @click="remove(parent.id)">Delete</button>
+            <span class="item-label">
+              <strong>{{ parent.name }}</strong>
+              <span class="skill-kind">{{ children(parent.id).length ? 'Parent skill' : 'Standalone skill' }}</span>
+            </span>
+            <div class="item-actions">
+              <button :disabled="busy" @click="edit(parent)">Edit</button>
+              <button :disabled="busy" @click="addChild(parent.id)">Add sub-skill</button>
+              <button class="delete-button" :disabled="busy || children(parent.id).length > 0" @click="remove(parent.id)">Delete</button>
+            </div>
           </div>
           <ul aria-label="Sub-skills">
             <li v-for="child in children(parent.id)" :key="child.id">
               <div class="task-item">
-                {{ parent.name }} / {{ child.name }} <span>Sub-skill</span>
-                <button :disabled="busy" @click="edit(child)">Edit / move</button>
-                <button :disabled="busy" @click="remove(child.id)">Delete</button>
+                <span class="item-label">
+                  <span>{{ parent.name }} / {{ child.name }}</span>
+                  <span class="skill-kind">Sub-skill</span>
+                </span>
+                <div class="item-actions">
+                  <button :disabled="busy" @click="edit(child)">Edit / move</button>
+                  <button class="delete-button" :disabled="busy" @click="remove(child.id)">Delete</button>
+                </div>
               </div>
             </li>
           </ul>
@@ -117,6 +125,7 @@ onMounted(load)
 
 <style scoped>
 label { display: flex; flex-direction: column; gap: 0.5rem; text-align: left; }
-.task-item { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.task-item { flex-wrap: wrap; gap: 0.5rem 0.75rem; }
+.skill-kind { color: var(--text); font-size: 0.85rem; }
 .form-error { padding: 0.75rem; border-left: 3px solid var(--theme-color); color: var(--theme-text); }
 </style>

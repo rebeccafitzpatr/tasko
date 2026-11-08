@@ -1,3 +1,5 @@
+import { toSqlUtc, zonedMidnight } from './timeZone.js'
+
 export interface HistoryQuery {
   limit: number
   start: string | null
@@ -16,8 +18,9 @@ function dateBoundary(value: unknown, exclusiveEnd: boolean): string | null {
   if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
     throw new Error('Enter a valid calendar date.')
   }
-  if (exclusiveEnd) date.setUTCDate(date.getUTCDate() + 1)
-  return date.toISOString().slice(0, 19).replace('T', ' ')
+  // Dates are calendar days in the app time zone; boundaries are stored as UTC.
+  const [year, month, day] = value.split('-').map(Number) as [number, number, number]
+  return toSqlUtc(zonedMidnight(year, month, exclusiveEnd ? day + 1 : day))
 }
 
 export function parseHistoryQuery(query: Record<string, unknown>):

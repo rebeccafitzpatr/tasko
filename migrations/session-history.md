@@ -4,7 +4,7 @@
 
 **Export CSV** on Analytics downloads **all** sessions in the applied date range,
 regardless of the visible history page. `GET /api/pomodoros/export` accepts the
-same optional inclusive UTC `start`/`end` dates as analytics/history and runs an
+same optional inclusive NZ `start`/`end` dates as analytics/history and runs an
 unpaginated query ordered by completion time descending, then ID descending.
 It returns CSV with an attachment filename, or HTTP 204 for no matching records.
 Invalid dates and query failures return JSON errors; the client shows an empty
@@ -13,7 +13,8 @@ message or export error with retry rather than downloading an empty file.
 Columns: `completed_at`, `duration_minutes`, `session_type`, `task`, `skill`,
 `parent_skill`, `skill_path`, and `timestamp_policy`. Labels use saved snapshots,
 including deleted records, with existing current-name fallbacks. Unassigned
-labels are empty cells. UTC timestamps have `Z`; legacy timezone-unknown
+labels are empty cells. `completed_at` stays an unambiguous UTC ISO timestamp
+ending in `Z` (spreadsheets can convert it to NZ time); legacy timezone-unknown
 timestamps retain their stored wall time and are marked `legacy_unknown`.
 
 CSV uses UTF-8 with BOM, CRLF record separators, double-quoted fields and doubled
@@ -28,13 +29,13 @@ history/timer/hierarchy migrations.
 ## Period selection and prior comparison
 
 Analytics offers All dates, Today, Last 7/30 days, This week/month/year to date,
-and Custom range. Presets use the current **UTC** day; weeks start Sunday.
+and Custom range. Presets use the current **New Zealand** day (`Pacific/Auckland`); weeks start Sunday.
 The visible applied boundaries control session totals, skill summaries, history,
 and the period figures inside each skill card. Editing dates is a draft until
 Apply dates; changing a preset applies immediately and resets history to page 1.
 
 Optional comparison uses the immediately preceding, non-overlapping interval
-with the **same inclusive number of UTC calendar days**, not the previous
+with the **same inclusive number of NZ calendar days**, not the previous
 calendar month/year. For January 8-14, it compares January 1-7. All-time and
 open-ended ranges require both boundaries before comparison. Prior reports
 query all matching logs, independently of history pages. Missing skill rows
@@ -47,8 +48,9 @@ own retry and do not replace current totals or history.
 `GET /api/analytics/summary?start=2026-01-01&end=2026-01-31` returns
 `totalMinutes` (duration), `totalPomodoros` (session count, timer and manual),
 and a skill `breakdown` over **all** matching logs, independently of history
-pagination. `range` echoes the inclusive calendar boundaries and `timezone: "UTC"`;
-either boundary may be omitted. UTC midnight starts the first day and the
+pagination. `range` echoes the inclusive calendar boundaries and `timezone: "Pacific/Auckland"`
+(or the backend `APP_TIME_ZONE` override); either boundary may be omitted. NZ
+midnight (converted to UTC, daylight-saving aware) starts the first day and the
 exclusive midnight after the last day ends the range. Legacy timezone-unknown
 timestamps are compared as stored, without inventing an offset.
 
@@ -142,7 +144,7 @@ Failures to save locally or on the API are displayed in the timer view. Pending 
 
 ## Manual entry and session corrections
 
-On Analytics, choose **Add manual session**, or **Edit** beside a recorded session. Enter a positive whole-minute duration and a completion date/time in your local timezone, no later than now. Leave both assignments empty for an unassigned entry, choose a skill alone, or select a task (its skill is used). The form converts the local time to a timezone-qualified ISO timestamp; the server validates and stores UTC.
+On Analytics, choose **Add manual session**, or **Edit** beside a recorded session. Enter a positive whole-minute duration and a completion date/time in New Zealand time (`Pacific/Auckland`, daylight-saving aware), no later than now. Leave both assignments empty for an unassigned entry, choose a skill alone, or select a task (its skill is used). The form converts the NZ time to a timezone-qualified ISO timestamp and rejects times skipped by a daylight-saving change; the server validates and stores UTC.
 
 `POST /api/pomodoros` accepts manual entries with `type: "manual"`, `duration`, `completedAt`, and nullable `taskId`/`skillId`. Manual entries have no timer completion identity. `PUT /api/pomodoros/:id` accepts the same editable fields, but not `type` or `completionId`: editing preserves the original record type and timer retry fingerprint.
 
@@ -156,10 +158,10 @@ No additional schema migration is needed for manual entry/editing after both ear
 
 `GET /api/pomodoros` returns `{ items, hasMore, nextCursor, limit }` instead of an array. `limit` defaults to 25 and must be an integer from 1 to 100. To browse older records, pass the returned `nextCursor` as `cursor` with the same date filters. Every page is ordered by `completed_at DESC, id DESC`; timestamp ties are resolved by ID, and newer inserts do not shift an older-record cursor. The cursor contains the last raw database timestamp, ID, and date boundaries. Invalid cursors, repeated query values, invalid dates, reversed ranges, and out-of-bounds limits receive HTTP 400 with an error message.
 
-Optional `start` and `end` are inclusive UTC calendar dates in `YYYY-MM-DD` format (years 1000 to 9998). Either boundary may be omitted. For example, `?start=2026-01-01&end=2026-01-31&limit=25` includes all of January through 23:59:59 on the end date. The server uses an exclusive next-day upper bound. Legacy timestamps remain in their original wall-clock representation because the original timezone is unknown; filters and period calculations compare those values as stored rather than guessing an offset.
+Optional `start` and `end` are inclusive New Zealand calendar dates (`Pacific/Auckland`, overridable with the backend `APP_TIME_ZONE` variable) in `YYYY-MM-DD` format (years 1000 to 9998). Either boundary may be omitted. For example, `?start=2026-01-01&end=2026-01-31&limit=25` includes all of January through 23:59:59 NZ time on the end date. The server converts NZ midnight boundaries to UTC (accounting for daylight saving) and uses an exclusive next-day upper bound. Legacy timestamps remain in their original wall-clock representation because the original timezone is unknown; filters and period calculations compare those values as stored rather than guessing an offset.
 
 Analytics provides Apply dates / All dates and Newer sessions / Older sessions controls, loading indicators, empty results, and explicit history errors with retry. Filters apply to history and time/session totals, not the current task count. Pages are bounded, but the entire matching history can be browsed; reaching the last page is explicit rather than silently dropping older sessions. Concurrent requests cannot replace a newer page/filter response with stale data.
 
-`GET /api/analytics/summary` accepts the same optional `start`/`end` dates. Overall totals, per-skill counts/minutes, and per-skill `todayMinutes`, `weekMinutes`, and `yearMinutes` aggregate every matching log without pagination or a row limit. Periods use UTC, weeks start Sunday, and period figures are intersected with the selected date range. The UI labels this timezone explicitly. Page navigation does not recompute aggregates from the current page. Current skills receive breakdowns; deleted/unassigned skill sessions still contribute to overall session/time totals.
+`GET /api/analytics/summary` accepts the same optional `start`/`end` dates. Overall totals, per-skill counts/minutes, and per-skill `todayMinutes`, `weekMinutes`, and `yearMinutes` aggregate every matching log without pagination or a row limit. Periods use New Zealand calendar days (weeks start Sunday), and period figures are intersected with the selected date range. The UI labels date inputs as NZ and displays session times in NZ time. Page navigation does not recompute aggregates from the current page. Current skills receive breakdowns; deleted/unassigned skill sessions still contribute to overall session/time totals.
 
 Deploy API and frontend together for the changed history response shape. No additional migration is required; the existing timestamp index supports history queries.

@@ -29,9 +29,11 @@
       <ul>
         <li v-for="task in tasks" :key="task.id">
           <div class="task-item">
-            {{ task.name }} ({{ getSkillName(task.skillId) }})
-            <button :disabled="busy" @click="editTask(task)">Edit</button>
-            <button class="delete-button" :disabled="busy" @click="deleteTask(task.id)">Delete</button>
+            <span class="item-label">{{ task.name }} ({{ getSkillName(task.skillId) }})</span>
+            <div class="item-actions">
+              <button :disabled="busy" @click="editTask(task)">Edit</button>
+              <button class="delete-button" :disabled="busy" @click="deleteTask(task.id)">Delete</button>
+            </div>
           </div>
         </li>
       </ul>

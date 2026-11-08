@@ -1,4 +1,5 @@
 import type { DateRange } from './service'
+import { nzToday } from './timeZone'
 
 export const reportPeriods = [
   { value: 'all', label: 'All dates' },
@@ -16,7 +17,7 @@ function calendarDate(value: string): Date {
   const date = new Date(`${value}T00:00:00Z`)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime()) ||
       date.toISOString().slice(0, 10) !== value || date.getUTCFullYear() < 1000 || date.getUTCFullYear() > 9998) {
-    throw new Error('Enter valid UTC calendar dates (years 1000 to 9998).')
+    throw new Error('Enter valid calendar dates (years 1000 to 9998).')
   }
   return date
 }
@@ -31,7 +32,7 @@ export function validateReportRange(range: DateRange): void {
 
 export function periodRange(period: Exclude<ReportPeriod, 'custom'>, now = new Date()): DateRange {
   if (period === 'all') return {}
-  const end = now.toISOString().slice(0, 10)
+  const end = nzToday(now)
   const start = calendarDate(end)
   if (period === 'last7') start.setUTCDate(start.getUTCDate() - 6)
   if (period === 'last30') start.setUTCDate(start.getUTCDate() - 29)
