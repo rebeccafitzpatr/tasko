@@ -510,13 +510,15 @@ describe('timer completion idempotency', () => {
       expect(second.items.map(session => session.id)).toEqual(Array.from({ length: 25 }, (_, i) => 35 - i))
     })
 
-    test('includes the complete end date and supports either date boundary alone', async () => {
-      seed(1, '2026-01-01T00:00:00Z')
-      sessions.set('end', { ...sessions.get('seed-1')!, id: 2, completedAt: '2026-01-02T23:59:59Z' })
-      sessions.set('after', { ...sessions.get('seed-1')!, id: 3, completedAt: '2026-01-03T00:00:00Z' })
+    test('includes the complete New Zealand end date and supports either date boundary alone', async () => {
+      // NZDT is UTC+13: 2026-01-01 00:00 NZ = 2025-12-31 11:00 UTC.
+      seed(1, '2025-12-31T11:00:00Z')
+      sessions.set('before', { ...sessions.get('seed-1')!, id: 4, completedAt: '2025-12-31T10:59:59Z' })
+      sessions.set('end', { ...sessions.get('seed-1')!, id: 2, completedAt: '2026-01-02T10:59:59Z' })
+      sessions.set('after', { ...sessions.get('seed-1')!, id: 3, completedAt: '2026-01-02T11:00:00Z' })
       expect((await page('start=2026-01-01&end=2026-01-02')).items.map(session => session.id)).toEqual([2, 1])
       expect((await page('start=2026-01-03')).items.map(session => session.id)).toEqual([3])
-      expect((await page('end=2026-01-01')).items.map(session => session.id)).toEqual([1])
+      expect((await page('end=2026-01-01')).items.map(session => session.id)).toEqual([1, 4])
       expect((await page('start=2026-02-01')).hasMore).toBe(false)
     })
 
@@ -539,7 +541,8 @@ describe('timer completion idempotency', () => {
     test('filtered aggregates include all filtered records, not just the requested page', async () => {
       seed(140)
       sessions.set('outside', { ...sessions.get('seed-1')!, id: 141, completedAt: '2026-02-01T00:00:00Z' })
-      const response = await fetch(url.replace('/pomodoros', '/analytics/summary') + '?start=2026-01-01&end=2026-01-01')
+      // Seeded at 2026-01-01 12:00 UTC, which is 2026-01-02 in New Zealand.
+      const response = await fetch(url.replace('/pomodoros', '/analytics/summary') + '?start=2026-01-02&end=2026-01-02')
       expect(response.status).toBe(200)
       expect(await response.json()).toMatchObject({
         totalPomodoros: 140, totalMinutes: 140, breakdown: [{ minutes: 140, pomodoros: 140 }],

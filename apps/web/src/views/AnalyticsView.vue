@@ -6,8 +6,8 @@
     <button v-if="loadError" :disabled="isRefreshing" @click="loadData(true)">Retry loading</button>
     <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
     <form class="history-filters" @submit.prevent="applyRange">
-      <label>Start date (UTC)<input v-model="startDate" name="start" type="date" /></label>
-      <label>End date (UTC)<input v-model="endDate" name="end" type="date" /></label>
+      <label>Start date (NZ)<input v-model="startDate" name="start" type="date" /></label>
+      <label>End date (NZ)<input v-model="endDate" name="end" type="date" /></label>
       <button :disabled="isRefreshing || historyLoading || editorOpen">Apply dates</button>
       <button type="button" :disabled="isRefreshing || historyLoading || editorOpen" @click="clearRange">All dates</button>
     </form>
@@ -41,9 +41,9 @@
             <span>{{ totalMinutesForSkill(skill.id) }} min</span>
           </div>
           <div class="skill-periods">
-            <span>Today (UTC): <b>{{ skillSummary(skill.id)?.todayMinutes ?? 0 }}</b> min</span>
-            <span>This week (UTC): <b>{{ skillSummary(skill.id)?.weekMinutes ?? 0 }}</b> min</span>
-            <span>This year (UTC): <b>{{ skillSummary(skill.id)?.yearMinutes ?? 0 }}</b> min</span>
+            <span>Today: <b>{{ skillSummary(skill.id)?.todayMinutes ?? 0 }}</b> min</span>
+            <span>This week: <b>{{ skillSummary(skill.id)?.weekMinutes ?? 0 }}</b> min</span>
+            <span>This year: <b>{{ skillSummary(skill.id)?.yearMinutes ?? 0 }}</b> min</span>
           </div>
         </li>
       </ul>
@@ -107,6 +107,7 @@ import { useAnalyticsStore } from '../stores/analyticsStore'
 import SessionEditor from '../components/SessionEditor.vue'
 import type { PomodoroLog, DateRange } from '../services/service'
 import { skillLabel } from '../services/skillLabels'
+import { formatNzDateTime } from '../services/timeZone'
 
 const taskStore = useTaskStore()
 const skillStore = useSkillStore()
@@ -243,8 +244,7 @@ function getSkillName(skillId: number | null | undefined) {
   return skill ? skillLabel(skill, skills.value) : 'Unassigned / unavailable'
 }
 function formatDateTime(dt: string) {
-  const d = new Date(dt)
-  return d.toLocaleString()
+  return formatNzDateTime(dt)
 }
 
 const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])

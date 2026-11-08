@@ -7,10 +7,19 @@ describe('history query validation', () => {
       value: { limit: 25, start: null, end: null, beforeTime: null, beforeId: null },
     })
   })
-  test('uses inclusive calendar dates, including leap days', () => {
+  test('uses inclusive New Zealand calendar dates, including leap days', () => {
     expect(parseHistoryQuery({ start: '2024-02-29', end: '2024-02-29', limit: '100' })).toMatchObject({
-      value: { limit: 100, start: '2024-02-29 00:00:00', end: '2024-03-01 00:00:00' },
+      value: { limit: 100, start: '2024-02-28 11:00:00', end: '2024-02-29 11:00:00' },
     })
+  })
+  test('follows New Zealand daylight-saving changes', () => {
+    expect(parseHistoryQuery({ start: '2026-04-05', end: '2026-04-05' })).toMatchObject({
+      value: { start: '2026-04-04 11:00:00', end: '2026-04-05 12:00:00' },
+    })
+    expect(parseHistoryQuery({ start: '2026-09-27', end: '2026-09-27' })).toMatchObject({
+      value: { start: '2026-09-26 12:00:00', end: '2026-09-27 11:00:00' },
+    })
+    expect(parseHistoryQuery({ start: '2026-07-01' })).toMatchObject({ value: { start: '2026-06-30 12:00:00' } })
   })
   test.each([
     { limit: '0' }, { limit: '101' }, { limit: '-1' }, { limit: '1.5' },

@@ -60,7 +60,7 @@ describe('session editor', () => {
     await flushPromises()
     expect(createManualSession).toHaveBeenCalledWith({
       taskId: null, skillId: null, duration: 30,
-      completedAt: new Date('2026-01-01T12:00:00').toISOString(),
+      completedAt: '2025-12-31T23:00:00.000Z',
     })
     expect(wrapper.emitted('saved')?.[0]).toEqual([manual])
   })

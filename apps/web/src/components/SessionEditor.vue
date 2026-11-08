@@ -5,7 +5,7 @@
     <p v-if="session?.skillPath">Recorded skill: {{ session.skillPath }}. Unchanged assignments preserve this historical path.</p>
     <fieldset :disabled="isSaving">
       <label>
-        Completed at
+        Completed at (NZ time)
         <input v-model="completedAt" name="completedAt" type="datetime-local" step="1" required />
       </label>
       <label>
@@ -43,6 +43,7 @@
 import { ref, watch } from 'vue'
 import { createManualSession, editSession, type PomodoroLog, type Skill, type Task } from '../services/service'
 import { skillLabel } from '../services/skillLabels'
+import { fromNzInput, toNzInput } from '../services/timeZone'
 
 const props = defineProps<{ session: PomodoroLog | null; tasks: Task[]; skills: Skill[] }>()
 const emit = defineEmits<{ saved: [session: PomodoroLog]; cancel: [] }>()
@@ -58,8 +59,7 @@ function taskSkillLabel(id: number | null | undefined) {
 }
 
 function localDateTime(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  return toNzInput(date)
 }
 
 watch(() => props.session, session => {
@@ -83,10 +83,8 @@ async function save() {
     error.value = 'Enter a positive whole number of minutes (1 to 2147483647).'
     return
   }
-  const date = new Date(completedAt.value)
-  const normalizedInput = completedAt.value.length === 16 ? `${completedAt.value}:00` : completedAt.value
-  if (!completedAt.value || Number.isNaN(date.getTime()) || date.getFullYear() < 1000 ||
-      localDateTime(date) !== normalizedInput) {
+  const date = fromNzInput(completedAt.value)
+  if (!date || Number(completedAt.value.slice(0, 4)) < 1000) {
     error.value = 'Enter a valid completion date and time.'
     return
   }

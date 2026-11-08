@@ -3,6 +3,7 @@ import { SQL, type TransactionSQL } from 'bun'
 import { db } from './db.js' // uses the db.ts export
 import { validateCreateSessionInput, validateEditSessionInput } from './sessionRules.js'
 import { parseHistoryQuery, historyCursor } from './historyQuery.js'
+import { toSqlUtc, zonedDate, zonedMidnight } from './timeZone.js'
 import type { PomodoroLog } from './types.js'
 import { validateSkillParent, validSkillName, type SkillNode } from './skillRules.js'
 
@@ -458,14 +459,11 @@ router.get('/analytics/summary', async (req, res) => {
   if ('error' in parsed) return res.status(400).json({ error: parsed.error })
   const { start, end } = parsed.value
   const now = new Date()
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-  const week = new Date(today)
-  week.setUTCDate(week.getUTCDate() - week.getUTCDay())
-  const year = new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
-  const sqlTime = (date: Date) => date.toISOString().slice(0, 19).replace('T', ' ')
-  const todayStart = sqlTime(today)
-  const weekStart = sqlTime(week)
-  const yearStart = sqlTime(year)
+  const local = zonedDate(now)
+  const sqlTime = toSqlUtc
+  const todayStart = sqlTime(zonedMidnight(local.year, local.month, local.day))
+  const weekStart = sqlTime(zonedMidnight(local.year, local.month, local.day - local.weekday))
+  const yearStart = sqlTime(zonedMidnight(local.year, 1, 1))
   const nowTime = sqlTime(now)
   try {
     const totals = (await db`
