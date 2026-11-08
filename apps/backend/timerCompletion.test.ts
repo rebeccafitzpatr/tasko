@@ -21,6 +21,7 @@ let releaseLookups: (() => void) | null = null
 let lookupCount = 0
 let failUpdate = false
 let failHistory = false
+let failExport = false
 let hierarchySkills = [
   { id: 4, name: 'English', parentId: null as number | null, minutesSpent: 0 },
 ]
@@ -47,21 +48,30 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
   }
   if (sql.includes('SELECT COUNT(*) AS c FROM tasks')) return [{ c: taskExists ? 1 : 0 }]
   if (sql.includes('GROUP BY s.id, s.name')) {
-    const associated = [...sessions.values()].filter(session =>
-      (session.skillId === 4 || session.parentSkillId === 4) && inRange(session, values[6], values[8]))
+    expect(sql).not.toContain('LIMIT')
+    expect(sql).toContain('AS directMinutes')
     expect(sql).toContain('OR pl.parent_skill_id_snapshot = s.id')
-    const periodTotal = (start: unknown, end: unknown) => associated
-      .filter(session => {
-        const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
-        return time >= String(start) && time <= String(end)
-      }).reduce((sum, session) => sum + session.duration, 0)
-    return [{
-      skillId: 4, skillName: 'English', pomodoros: associated.length,
-      minutes: associated.reduce((sum, session) => sum + session.duration, 0),
-      todayMinutes: periodTotal(values[0], values[1]),
-      weekMinutes: periodTotal(values[2], values[3]),
-      yearMinutes: periodTotal(values[4], values[5]),
-    }]
+    return hierarchySkills.map(skill => {
+      const associated = [...sessions.values()].filter(session =>
+        (session.skillId === skill.id || session.parentSkillId === skill.id) && inRange(session, values[6], values[8]))
+      const direct = associated.filter(session => session.skillId === skill.id)
+      const parent = hierarchySkills.find(item => item.id === skill.parentId)
+      const periodTotal = (start: unknown, end: unknown) => associated
+        .filter(session => {
+          const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
+          return time >= String(start) && time <= String(end)
+        }).reduce((sum, session) => sum + session.duration, 0)
+      return {
+        skillId: skill.id, skillName: skill.name, pomodoros: associated.length,
+        parentId: skill.parentId, parentName: parent?.name ?? null,
+        skillPath: parent ? `${parent.name} / ${skill.name}` : skill.name,
+        directPomodoros: direct.length, directMinutes: direct.reduce((sum, session) => sum + session.duration, 0),
+        minutes: associated.reduce((sum, session) => sum + session.duration, 0),
+        todayMinutes: periodTotal(values[0], values[1]),
+        weekMinutes: periodTotal(values[2], values[3]),
+        yearMinutes: periodTotal(values[4], values[5]),
+      }
+    })
   }
   if (sql.includes('AS cursorTime')) {
     if (failHistory) throw new Error('History unavailable')
@@ -80,6 +90,16 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
     return filtered.map(session => ({
       ...session, cursorTime: session.completedAt.replace('T', ' ').replace(/Z$/, ''),
     }))
+  }
+  if (sql.includes('AS completedAtIsUtc')) {
+    if (failExport) throw new Error('Export unavailable')
+    expect(sql).not.toContain('LIMIT')
+    expect(sql).toContain('ORDER BY pl.completed_at DESC, pl.id DESC')
+    expect(sql).toContain('COALESCE(pl.skill_path_snapshot')
+    return [...sessions.values()]
+      .filter(session => inRange(session, values[0], values[2]))
+      .sort((a, b) => b.completedAt.localeCompare(a.completedAt) || b.id - a.id)
+      .map(session => ({ ...session, completedAtIsUtc: session.completedAt.endsWith('Z') }))
   }
   if (sql.includes('WHERE completion_id')) {
     const session = sessions.get(String(values[0]))
@@ -238,6 +258,7 @@ beforeEach(() => {
   failInsert = false
   failUpdate = false
   failHistory = false
+  failExport = false
   lookupBarrier = null
   releaseLookups = null
   lookupCount = 0
@@ -259,7 +280,75 @@ function skillRequest(path = '', method = 'GET', body?: unknown) {
   })
 }
 
+describe('CSV export HTTP contract', () => {
+  test('exports all matching records, saved labels and UTC/legacy timestamps independently of pagination', async () => {
+    for (let id = 1; id <= 145; id++) sessions.set(`export-${id}`, {
+      id, taskId: null, skillId: null, taskName: 'Deleted task', skillName: 'Deleted skill',
+      parentSkillName: 'Old parent', skillPath: 'Old parent / Deleted skill',
+      duration: 15, completedAt: '2026-01-31T10:59:59Z', type: id % 2 ? 'timer' : 'manual',
+      completionId: null, completionRequest: null,
+    })
+    sessions.set('outside', { ...sessions.get('export-1')!, id: 146, completedAt: '2026-01-31T11:00:00Z' })
+    sessions.set('legacy', { ...sessions.get('export-1')!, id: 147, completedAt: '2026-01-01 00:00:00' })
+    const response = await fetch(`${url}/export?start=2026-01-01&end=2026-01-31&limit=1`)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toContain('text/csv')
+    expect(response.headers.get('Content-Disposition')).toContain('tasko-sessions_2026-01-01_2026-01-31.csv')
+    const csv = await response.text()
+    expect(csv.trim().split('\r\n')).toHaveLength(147)
+    expect(csv).toContain('"2026-01-31T10:59:59Z","15","timer","Deleted task","Deleted skill","Old parent","Old parent / Deleted skill","UTC"')
+    expect(csv).toContain('"2026-01-01 00:00:00","15","timer","Deleted task","Deleted skill","Old parent","Old parent / Deleted skill","legacy_unknown"')
+    expect(csv).not.toContain('2026-01-31T11:00:00Z')
+    expect((await fetch(`${url}/export?start=2026-02-01`)).status).toBe(200)
+    expect((await fetch(`${url}/export?end=2026-01-01`)).status).toBe(200)
+  })
+  test('communicates empty results, invalid dates and query failures', async () => {
+    const empty = await fetch(`${url}/export`)
+    expect(empty.status).toBe(204)
+    expect(await empty.text()).toBe('')
+    for (const query of ['start=2026-02-29', 'start=2026-02-01&end=2026-01-01', 'start=2026-01-01&start=2026-01-02']) {
+      expect((await fetch(`${url}/export?${query}`)).status).toBe(400)
+    }
+    failExport = true
+    const response = await fetch(`${url}/export`)
+    expect(response.status).toBe(500)
+    expect(await response.json()).toEqual({ error: 'Export unavailable' })
+  })
+})
+
 describe('skill hierarchy HTTP behavior and historical assignments', () => {
+  test('range summaries include every matching session and explicit parent/sub-skill rollups', async () => {
+    hierarchySkills.push({ id: 5, name: 'Grammar', parentId: 4, minutesSpent: 0 })
+    for (let id = 1; id <= 140; id++) {
+      sessions.set(`range-${id}`, {
+        id, taskId: null, skillId: 5, parentSkillId: 4, parentSkillName: 'English',
+        taskName: null, skillName: 'Grammar', skillPath: 'English / Grammar', duration: 2,
+        completedAt: '2026-01-31T10:59:59Z', type: id % 2 ? 'timer' : 'manual',
+        completionId: null, completionRequest: null,
+      })
+    }
+    sessions.set('direct', { ...sessions.get('range-1')!, id: 141, skillId: 4, parentSkillId: null, duration: 10 })
+    sessions.set('unassigned', { ...sessions.get('range-1')!, id: 142, skillId: null, parentSkillId: null, duration: 7 })
+    sessions.set('outside', { ...sessions.get('range-1')!, id: 143, completedAt: '2026-01-31T11:00:00Z' })
+    const summaryUrl = url.replace('/pomodoros', '/analytics/summary')
+    const result = await fetch(`${summaryUrl}?start=2026-01-01&end=2026-01-31`)
+    expect(result.status).toBe(200)
+    expect(await result.json()).toMatchObject({
+      totalPomodoros: 142, totalMinutes: 297,
+      range: { start: '2026-01-01', end: '2026-01-31', timezone: 'Pacific/Auckland', endInclusive: true },
+      breakdown: [
+        { skillId: 4, parentId: null, minutes: 290, pomodoros: 141, directMinutes: 10, directPomodoros: 1 },
+        { skillId: 5, parentId: 4, skillPath: 'English / Grammar', minutes: 280, pomodoros: 140, directMinutes: 280 },
+      ],
+    })
+    const empty = await fetch(`${summaryUrl}?start=2025-01-01&end=2025-01-01`)
+    expect(await empty.json()).toMatchObject({
+      totalPomodoros: 0, totalMinutes: 0, breakdown: [{ minutes: 0 }, { minutes: 0 }],
+    })
+    expect((await fetch(`${summaryUrl}?start=2026-02-01&end=2026-01-01`)).status).toBe(400)
+    expect((await fetch(`${summaryUrl}?start=2026-02-29`)).status).toBe(400)
+  })
+
   test('creates standalone and child skills and reads the relationship', async () => {
     const parent = await skillRequest('', 'POST', { name: 'Programming' })
     expect(parent.status).toBe(201)

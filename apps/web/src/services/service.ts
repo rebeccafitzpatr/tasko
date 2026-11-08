@@ -35,12 +35,18 @@ export type PomodoroLog = {
 };
 
 export type AnalyticsSummary = {
+  range?: { start: string | null; end: string | null; timezone: 'UTC'; endInclusive: true };
   totalPomodoros: number;
   totalMinutes?: number;
   totalTasks?: number;
   breakdown?: Array<{
     skillId?: number
     skillName?: string
+    parentId?: number | null
+    parentName?: string | null
+    skillPath?: string
+    directPomodoros?: number
+    directMinutes?: number
     pomodoros?: number
     minutes?: number
     todayMinutes?: number
@@ -180,6 +186,13 @@ function isSessionPage(value: unknown): value is SessionPage {
   return Array.isArray(page.items)
     && typeof page.hasMore === 'boolean'
     && (page.nextCursor === null || typeof page.nextCursor === 'string');
+}
+
+export async function exportHistory(range: DateRange = {}): Promise<Blob | null> {
+  const res = await fetch(`${API_BASE}/pomodoros/export?${rangeParams(range)}`);
+  await requireOk(res);
+  if (res.status === 204) return null;
+  return res.blob();
 }
 
 export interface SessionDetails {

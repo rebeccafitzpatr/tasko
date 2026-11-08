@@ -3,9 +3,10 @@ import { SQL, type TransactionSQL } from 'bun'
 import { db } from './db.js' // uses the db.ts export
 import { validateCreateSessionInput, validateEditSessionInput } from './sessionRules.js'
 import { parseHistoryQuery, historyCursor } from './historyQuery.js'
-import { toSqlUtc, zonedDate, zonedMidnight } from './timeZone.js'
+import { APP_TIME_ZONE, toSqlUtc, zonedDate, zonedMidnight } from './timeZone.js'
 import type { PomodoroLog } from './types.js'
 import { validateSkillParent, validSkillName, type SkillNode } from './skillRules.js'
+import { historyCsv, type ExportSession } from './historyCsv.js'
 
 const router = Router();
 
@@ -409,6 +410,38 @@ router.put('/pomodoros/:id', async (req, res) => {
   }
 })
 
+router.get('/pomodoros/export', async (req, res) => {
+  const parsed = parseHistoryQuery({ start: req.query.start, end: req.query.end })
+  if ('error' in parsed) return res.status(400).json({ error: parsed.error })
+  const { start, end } = parsed.value
+  try {
+    const logs: ExportSession[] = await db`
+      SELECT pl.id, pl.task_id AS taskId, pl.skill_id AS skillId,
+        COALESCE(pl.task_name_snapshot, t.name) AS taskName,
+        COALESCE(pl.skill_name_snapshot, s.name) AS skillName,
+        pl.parent_skill_id_snapshot AS parentSkillId, pl.parent_skill_name_snapshot AS parentSkillName,
+        COALESCE(pl.skill_path_snapshot, pl.skill_name_snapshot, s.name) AS skillPath,
+        pl.duration_minutes AS duration, pl.type,
+        pl.completed_at_is_utc AS completedAtIsUtc,
+        CASE WHEN pl.completed_at_is_utc THEN DATE_FORMAT(pl.completed_at, '%Y-%m-%dT%H:%i:%sZ')
+          ELSE DATE_FORMAT(pl.completed_at, '%Y-%m-%d %H:%i:%s') END AS completedAt
+      FROM pomodoro_logs pl
+      LEFT JOIN tasks t ON t.id = pl.task_id
+      LEFT JOIN skills s ON s.id = pl.skill_id
+      WHERE (${start} IS NULL OR pl.completed_at >= ${start})
+        AND (${end} IS NULL OR pl.completed_at < ${end})
+      ORDER BY pl.completed_at DESC, pl.id DESC
+    `
+    if (logs.length === 0) return res.status(204).send()
+    const filename = `tasko-sessions_${req.query.start ?? 'all'}_${req.query.end ?? 'latest'}.csv`
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(historyCsv(logs))
+  } catch (cause) {
+    res.status(500).json({ error: (cause as Error).message })
+  }
+})
+
 router.get('/pomodoros', async (req, res) => {
   const parsed = parseHistoryQuery(req.query)
   if ('error' in parsed) return res.status(400).json({ error: parsed.error })
@@ -473,14 +506,19 @@ router.get('/analytics/summary', async (req, res) => {
     `)[0];
     const totalTasks = (await db`SELECT COUNT(*) AS c FROM tasks`)[0]?.c ?? 0;
 
-    // Optional: per-skill breakdown (if you want to surface this too)
     const breakdown: {
       skillId: number; skillName: string; pomodoros: number; minutes: number;
+      parentId: number | null; parentName: string | null; skillPath: string;
+      directPomodoros: number; directMinutes: number;
       todayMinutes: number; weekMinutes: number; yearMinutes: number
     }[] = await db`
       SELECT s.id AS skillId, s.name AS skillName,
+             s.parent_id AS parentId, p.name AS parentName,
+             CASE WHEN p.id IS NULL THEN s.name ELSE CONCAT(p.name, ' / ', s.name) END AS skillPath,
              COUNT(pl.id) AS pomodoros,
              COALESCE(SUM(pl.duration_minutes), 0) AS minutes,
+             COALESCE(SUM(CASE WHEN pl.skill_id = s.id THEN 1 ELSE 0 END), 0) AS directPomodoros,
+             COALESCE(SUM(CASE WHEN pl.skill_id = s.id THEN pl.duration_minutes ELSE 0 END), 0) AS directMinutes,
              COALESCE(SUM(CASE WHEN pl.completed_at >= ${todayStart} AND pl.completed_at <= ${nowTime}
                THEN pl.duration_minutes ELSE 0 END), 0) AS todayMinutes,
              COALESCE(SUM(CASE WHEN pl.completed_at >= ${weekStart} AND pl.completed_at <= ${nowTime}
@@ -488,18 +526,24 @@ router.get('/analytics/summary', async (req, res) => {
              COALESCE(SUM(CASE WHEN pl.completed_at >= ${yearStart} AND pl.completed_at <= ${nowTime}
                THEN pl.duration_minutes ELSE 0 END), 0) AS yearMinutes
       FROM skills s
+      LEFT JOIN skills p ON p.id = s.parent_id
       LEFT JOIN pomodoro_logs pl ON (pl.skill_id = s.id OR pl.parent_skill_id_snapshot = s.id)
         AND (${start} IS NULL OR pl.completed_at >= ${start})
         AND (${end} IS NULL OR pl.completed_at < ${end})
-      GROUP BY s.id, s.name
+      GROUP BY s.id, s.name, s.parent_id, p.id, p.name
+      ORDER BY s.id
     `;
 
     res.json({ totalPomodoros: Number(totals?.c ?? 0),
       totalMinutes: Number(totals?.m ?? 0),
       totalTasks: Number(totalTasks),
+      range: { start: req.query.start ?? null, end: req.query.end ?? null, timezone: APP_TIME_ZONE, endInclusive: true },
       breakdown: breakdown.map(row => ({
         skillId: Number(row.skillId), skillName: row.skillName,
+        parentId: row.parentId == null ? null : Number(row.parentId), parentName: row.parentName,
+        skillPath: row.skillPath,
         pomodoros: Number(row.pomodoros), minutes: Number(row.minutes),
+        directPomodoros: Number(row.directPomodoros), directMinutes: Number(row.directMinutes),
         todayMinutes: Number(row.todayMinutes), weekMinutes: Number(row.weekMinutes),
         yearMinutes: Number(row.yearMinutes),
       }))

@@ -1,5 +1,69 @@
 # Session history rules
 
+## CSV history export
+
+**Export CSV** on Analytics downloads **all** sessions in the applied date range,
+regardless of the visible history page. `GET /api/pomodoros/export` accepts the
+same optional inclusive NZ `start`/`end` dates as analytics/history and runs an
+unpaginated query ordered by completion time descending, then ID descending.
+It returns CSV with an attachment filename, or HTTP 204 for no matching records.
+Invalid dates and query failures return JSON errors; the client shows an empty
+message or export error with retry rather than downloading an empty file.
+
+Columns: `completed_at`, `duration_minutes`, `session_type`, `task`, `skill`,
+`parent_skill`, `skill_path`, and `timestamp_policy`. Labels use saved snapshots,
+including deleted records, with existing current-name fallbacks. Unassigned
+labels are empty cells. `completed_at` stays an unambiguous UTC ISO timestamp
+ending in `Z` (spreadsheets can convert it to NZ time); legacy timezone-unknown
+timestamps retain their stored wall time and are marked `legacy_unknown`.
+
+CSV uses UTF-8 with BOM, CRLF record separators, double-quoted fields and doubled
+embedded quotes. Commas and newlines in names stay inside quoted cells.
+Potential spreadsheet formulas (including whitespace before `=`, `+`, `-`, or
+`@`, and leading tab/newline) receive an apostrophe prefix. This intentional
+export-only transformation does not change stored names.
+The complete export currently uses server memory; very large histories may
+need streaming later. No new migration is required after the existing
+history/timer/hierarchy migrations.
+
+## Period selection and prior comparison
+
+Analytics offers All dates, Today, Last 7/30 days, This week/month/year to date,
+and Custom range. Presets use the current **New Zealand** day (`Pacific/Auckland`); weeks start Sunday.
+The visible applied boundaries control session totals, skill summaries, history,
+and the period figures inside each skill card. Editing dates is a draft until
+Apply dates; changing a preset applies immediately and resets history to page 1.
+
+Optional comparison uses the immediately preceding, non-overlapping interval
+with the **same inclusive number of NZ calendar days**, not the previous
+calendar month/year. For January 8-14, it compares January 1-7. All-time and
+open-ended ranges require both boundaries before comparison. Prior reports
+query all matching logs, independently of history pages. Missing skill rows
+mean no activity for that skill; a zero baseline has no percentage change,
+and empty periods are explicitly identified. Comparison failures have their
+own retry and do not replace current totals or history.
+
+## Date-range analytics contract
+
+`GET /api/analytics/summary?start=2026-01-01&end=2026-01-31` returns
+`totalMinutes` (duration), `totalPomodoros` (session count, timer and manual),
+and a skill `breakdown` over **all** matching logs, independently of history
+pagination. `range` echoes the inclusive calendar boundaries and `timezone: "Pacific/Auckland"`
+(or the backend `APP_TIME_ZONE` override); either boundary may be omitted. NZ
+midnight (converted to UTC, daylight-saving aware) starts the first day and the
+exclusive midnight after the last day ends the range. Legacy timezone-unknown
+timestamps are compared as stored, without inventing an offset.
+
+Breakdown rows include current `parentId`, `parentName`, `skillPath`,
+`directMinutes` and `directPomodoros` for direct assignments. `minutes` and
+`pomodoros` also include historical sub-skill sessions whose saved parent ID
+matches the skill. Do not sum overlapping parent and child rollups: overall
+totals count every matching session exactly once, including unassigned and
+deleted-skill history. Empty ranges return zero totals and zero-valued rows for
+current skills. `totalTasks` always counts current tasks, not date-filtered tasks.
+No new migration is required after the existing session-history, timer-completion,
+and skill-hierarchy migrations.
+
 ## Optional skill hierarchy
 
 Apply `20261106_skill_hierarchy.sql` once after `20261105_session_history.sql` and
