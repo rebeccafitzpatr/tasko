@@ -65,13 +65,20 @@
       </div>
       <div class="table-responsive">
         <table class="analytics-table">
+          <colgroup>
+            <col class="col-task" />
+            <col class="col-skill" />
+            <col class="col-duration" />
+            <col class="col-completed" />
+            <col class="col-actions" />
+          </colgroup>
           <thead>
             <tr>
-              <th>Task</th>
-              <th>Skill</th>
-              <th>Duration (min)</th>
-              <th>Completed At</th>
-              <th>Actions</th>
+              <th scope="col">Task</th>
+              <th scope="col">Skill</th>
+              <th scope="col">Duration</th>
+              <th scope="col">Completed</th>
+              <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -378,9 +385,19 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
   padding: 0.6rem 0.75rem;
   border-bottom: 1px solid var(--border);
   text-align: left;
+  vertical-align: middle;
 }
 
+.col-duration { width: 6.5rem; }
+.col-actions { width: 6rem; }
+
+.analytics-table td button { white-space: nowrap; }
+
 .analytics-table th {
+  overflow-wrap: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text-on-accent);
   background: var(--theme-color);
 }
