@@ -167,7 +167,19 @@ export async function fetchPomodoros(options: HistoryOptions = {}): Promise<Sess
   if (options.limit !== undefined) params.set('limit', String(options.limit));
   if (options.cursor) params.set('cursor', options.cursor);
   const res = await fetch(`${API_BASE}/pomodoros?${params}`);
-  return handleResponse<SessionPage>(res);
+  const page = await handleResponse<unknown>(res);
+  if (!isSessionPage(page)) {
+    throw new Error('Session history response is in an outdated format. Restart or redeploy the backend with the latest code and migrations.');
+  }
+  return page;
+}
+
+function isSessionPage(value: unknown): value is SessionPage {
+  if (typeof value !== 'object' || value === null) return false;
+  const page = value as Partial<SessionPage>;
+  return Array.isArray(page.items)
+    && typeof page.hasMore === 'boolean'
+    && (page.nextCursor === null || typeof page.nextCursor === 'string');
 }
 
 export interface SessionDetails {

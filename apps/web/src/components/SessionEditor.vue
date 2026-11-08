@@ -1,7 +1,6 @@
 <template>
   <form class="session-editor" novalidate @submit.prevent="save">
     <h3>{{ session ? 'Edit session' : 'Add manual session' }}</h3>
-    <p>Enter the completion time in your local timezone. Task and skill are optional.</p>
     <p v-if="session">Original type: {{ session.type }}. Editing does not change the session type.</p>
     <p v-if="session?.skillPath">Recorded skill: {{ session.skillPath }}. Unchanged assignments preserve this historical path.</p>
     <fieldset :disabled="isSaving">
@@ -124,6 +123,6 @@ fieldset {
 }
 label { display: flex; flex-direction: column; gap: 0.5rem; text-align: left; }
 input, select { width: 100%; min-width: 0; box-sizing: border-box; }
-.session-actions { display: flex; gap: 0.5rem; align-items: end; }
+.session-actions { display: flex; gap: 0.5rem; align-items: flex-end; }
 .session-error { color: var(--theme-text); border-left: 3px solid var(--theme-color); padding: 0.75rem; }
 </style>

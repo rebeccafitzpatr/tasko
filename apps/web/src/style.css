@@ -187,15 +187,18 @@ p {
 
 .details {
   display: flex;
-  align-items:stretch;
+  align-items: flex-end;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
 .details > input,
 .details > select,
-.details > button {
-  min-height: 40px;
+label > input:not([type="radio"]):not([type="checkbox"]),
+label > select {
+  box-sizing: border-box;
+  min-height: 44px;
   padding: 8px 12px;
   color: var(--text-strong);
   font: inherit;
@@ -226,17 +229,48 @@ select {
 }
 
 button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 8px 14px;
+  line-height: 1.2;
   cursor: pointer;
   background: var(--theme-dark);
-  border-color: var(--theme-color);
+  border: 1px solid var(--theme-color);
   border-radius: 6px;
   color: var(--text-on-accent);
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background: var(--theme-text);
   border-color: var(--theme-text);
   color: var(--text-on-accent);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.item-label {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
 }
 
 input:focus,
@@ -297,17 +331,6 @@ select option:disabled {
 
 .delete-button {
   flex-shrink: 0;
-  min-height: 34px;
-  margin-left: 12px;
-  padding: 6px 10px;
-  color: var(--text-on-accent);
-  background: var(--theme-dark);
-  border: 1px solid var(--theme-text);
-  border-radius: 6px;
-}
-
-.delete-button:hover {
-  background: var(--theme-text);
 }
 
 /* Responsive layout */
@@ -344,19 +367,31 @@ select option:disabled {
     flex-direction: column;
   }
 
-  .tasks-list {
+  div.tasks-list {
     margin-inline: 0;
-    padding: 1rem;
+    padding: 0.75rem;
   }
 
-  .task-item {
+  .tasks-list .task-item {
     align-items: stretch;
     flex-direction: column;
+    margin: 0.75rem 0;
   }
 
-  .delete-button {
-    width: 100%;
+  .tasks-list ul ul {
+    padding-left: 0.75rem;
+  }
+
+  .item-label {
+    flex: 0 0 auto;
+  }
+
+  .item-actions {
     margin-left: 0;
+  }
+
+  .item-actions > button {
+    flex: 1 1 0;
   }
 
   h1 {

@@ -12,8 +12,6 @@
       <button type="button" :disabled="isRefreshing || historyLoading || editorOpen" @click="clearRange">All dates</button>
     </form>
     <p v-if="rangeError" role="alert">{{ rangeError }}</p>
-    <p>Session totals: {{ appliedRange.start || 'all history' }} to {{ appliedRange.end || 'latest' }}.
-      Task count includes all current tasks. Period figures use UTC (weeks start Sunday) within these dates.</p>
     <p v-if="isRefreshing" role="status">Loading analytics...</p>
     <div v-if="analyticsMatchesRange" class="analytics-summary card">
       <div class="summary-item">
@@ -37,7 +35,6 @@
       <ul class="skill-list">
         <li v-for="skill in skills" :key="skill.id" class="skill-card">
           <div class="skill-title">{{ skillLabel(skill, skills) }}</div>
-          <p v-if="skill.parentId == null">Direct sessions plus sessions originally recorded under this parent's sub-skills. Do not add parent and sub-skill totals together.</p>
           <div class="skill-metrics">
             <span>{{ countTasksForSkill(skill.id) }} tasks</span>
             <span>{{ totalPomodorosForSkill(skill.id) }} Pomodoros</span>
@@ -53,16 +50,14 @@
     </div>
     <div class="card">
       <h2>Session history</h2>
-      <button :disabled="isRefreshing || historyLoading || editorOpen" @click="openEditor(null)">Add manual session</button>
+      <button class="add-session" :disabled="isRefreshing || historyLoading || editorOpen" @click="openEditor(null)">Add manual session</button>
       <SessionEditor v-if="editorOpen" :session="editingSession" :tasks="tasks" :skills="skills"
         @saved="sessionSaved" @cancel="editorOpen = false" />
       <p v-if="historyLoading" role="status">Loading sessions...</p>
       <p v-if="historyError" role="alert">{{ historyError }}</p>
       <button v-if="historyError" :disabled="historyLoading || isRefreshing" @click="retryHistory">Retry history</button>
-      <p v-if="!historyLoading && !historyError">Page {{ previousCursors.length + 1 }}: {{ recentPomodoros.length }} sessions.
-        {{ pomodoroStore.historyHasMore ? 'Older sessions available.' : 'End of history.' }}</p>
       <p v-if="!historyLoading && !historyError && recentPomodoros.length === 0">No sessions match these dates.</p>
-      <div class="history-navigation">
+      <div class="history-navigation" v-if="previousCursors.length > 0 || pomodoroStore.historyHasMore">
         <button :disabled="isRefreshing || historyLoading || editorOpen || previousCursors.length === 0"
           @click="loadHistory(previousCursors[previousCursors.length - 1] ?? null, 'previous')">Newer sessions</button>
         <button :disabled="isRefreshing || historyLoading || editorOpen || !pomodoroStore.historyHasMore"
@@ -76,7 +71,6 @@
               <th>Skill</th>
               <th>Duration (min)</th>
               <th>Completed At</th>
-              <th>Type</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -86,7 +80,6 @@
               <td data-label="Skill">{{ log.skillPath ?? log.skillName ?? getSkillName(log.skillId) }}</td>
               <td data-label="Duration">{{ log.duration }} min</td>
               <td data-label="Completed">{{ formatDateTime(log.completedAt) }}</td>
-              <td data-label="Type">{{ log.type }}</td>
               <td data-label="Actions">
                 <button :disabled="isRefreshing || historyLoading || editorOpen || log.id == null" @click="openEditor(log)">Edit</button>
               </td>
@@ -247,9 +240,7 @@ function formatDateTime(dt: string) {
   return d.toLocaleString()
 }
 
-const recentPomodoros = computed(() =>
-  pomodoroStore.pomodoroLog,
-)
+const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
 // ...existing script code...
 </script>
 
@@ -262,6 +253,7 @@ const recentPomodoros = computed(() =>
   margin-bottom: 1rem;
 }
 .history-filters label { display: flex; flex-direction: column; gap: 0.4rem; text-align: left; }
+.add-session { margin-bottom: 1rem; }
 .analytics-root {
   width: 100%;
   min-width: 0;
