@@ -76,6 +76,7 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
   if (sql.includes('AS cursorTime')) {
     if (failHistory) throw new Error('History unavailable')
     expect(sql).toContain('ORDER BY pl.completed_at DESC, pl.id DESC')
+    expect(sql).toContain('pl.user_id =')
     const beforeTime = values[4]
     const beforeId = values[7]
     const filtered = [...sessions.values()]
@@ -86,7 +87,7 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
             (time === String(beforeTime) && session.id < Number(beforeId)))
       })
       .sort((a, b) => b.completedAt.localeCompare(a.completedAt) || b.id - a.id)
-      .slice(0, Number(values[8]))
+      .slice(0, Number(values[9]))
     return filtered.map(session => ({
       ...session, cursorTime: session.completedAt.replace('T', ' ').replace(/Z$/, ''),
     }))
@@ -96,6 +97,7 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
     expect(sql).not.toContain('LIMIT')
     expect(sql).toContain('ORDER BY pl.completed_at DESC, pl.id DESC')
     expect(sql).toContain('COALESCE(pl.skill_path_snapshot')
+    expect(sql).toContain('pl.user_id =')
     return [...sessions.values()]
       .filter(session => inRange(session, values[0], values[2]))
       .sort((a, b) => b.completedAt.localeCompare(a.completedAt) || b.id - a.id)
@@ -125,7 +127,8 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
     return hierarchySkills.map(skill => ({ ...skill }))
   }
   if (sql.includes('FROM skills s LEFT JOIN skills p')) {
-    const skills = values.length ? [skillDetails(Number(values[0]))] : hierarchySkills.map(skill => skillDetails(skill.id))
+    // Single-skill lookups filter by s.id; list queries only filter by user.
+    const skills = sql.includes('s.id =') ? [skillDetails(Number(values[0]))] : hierarchySkills.map(skill => skillDetails(skill.id))
     return skills.filter(skill => skill !== null)
   }
   if (sql.includes('INSERT INTO skills')) {
@@ -231,6 +234,8 @@ mock.module('./db.js', () => ({ db: testDb }))
 const { default: api } = await import('./api.js')
 const app = express()
 app.use(express.json())
+// Simulate requireAuth (mounted in index.ts) so handlers see an authenticated user.
+app.use((req, _res, next) => { req.userId = 1; next() })
 app.use('/api', api)
 const server = app.listen(0, '127.0.0.1')
 await new Promise<void>(resolve => server.once('listening', resolve))

@@ -1,3 +1,9 @@
+export interface User {
+  id: number
+  email: string
+  displayName?: string | null
+}
+
 export interface Skill {
   id: number
   name: string

@@ -5,12 +5,14 @@
       
       <h2 class="logo"> TASKO </h2>
 
-      <div class="nav-links">
+      <div v-if="auth.isAuthenticated" class="nav-links">
         <router-link to="/tasks">Tasks</router-link>  
         <router-link to="/skills">Skills</router-link> 
         <router-link to="/pomodoro">Pomodoro</router-link> 
         <router-link to="/analytics">Analytics</router-link>
         <router-link to="/settings">Settings</router-link>
+        <span class="user-label" :title="auth.user?.email">{{ auth.displayLabel }}</span>
+        <button class="logout-button" type="button" @click="logout">Log out</button>
       </div>
     </nav>
   
@@ -19,6 +21,20 @@
 </template>
 
 <script setup lang="ts">
+  import { useRouter } from 'vue-router'
+  import { useAuthStore } from './stores/authStore'
+
+  const auth = useAuthStore()
+  const router = useRouter()
+
+  async function logout() {
+    try {
+      await auth.logout()
+    } finally {
+      router.push('/login')
+    }
+  }
+
   const themes: Record<string, string> = {
     grey: '#737373',
     blue: '#2563a6',
@@ -66,6 +82,26 @@ nav a {
 }
 
 .router-link-active {
+  background-color: var(--theme-color);
+  color: var(--text-on-accent);
+}
+
+.user-label {
+  margin-left: 8px;
+  font-weight: 600;
+}
+
+.logout-button {
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--text-strong);
+  background-color: var(--surface);
+  border: 2px solid var(--theme-color);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.logout-button:hover {
   background-color: var(--theme-color);
   color: var(--text-on-accent);
 }

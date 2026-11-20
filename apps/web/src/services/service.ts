@@ -57,8 +57,51 @@ export type AnalyticsSummary = {
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
+const TOKEN_KEY = 'tasko-auth-token'
+
+export type AuthUser = { id: number; email: string; displayName: string | null };
+
+export interface AuthSession {
+  token: string;
+  user: AuthUser;
+}
+
+// localStorage/window are absent in some test environments; degrade to "logged out".
+function tokenStorage(): Storage | null {
+  return typeof localStorage === 'undefined' ? null : localStorage;
+}
+
+export function getAuthToken(): string | null {
+  return tokenStorage()?.getItem(TOKEN_KEY) ?? null;
+}
+
+export function hasAuthToken(): boolean {
+  return getAuthToken() !== null;
+}
+
+export function setAuthToken(token: string | null): void {
+  const storage = tokenStorage();
+  if (!storage) return;
+  if (token) storage.setItem(TOKEN_KEY, token);
+  else storage.removeItem(TOKEN_KEY);
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function jsonHeaders(): Record<string, string> {
+  return { 'Content-Type': 'application/json', ...authHeaders() };
+}
+
 async function requireOk(res: Response): Promise<void> {
   if (!res.ok) {
+    if (res.status === 401) {
+      // Expired or missing session: drop the token and let the app redirect to login.
+      setAuthToken(null);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('tasko:unauthorized'));
+    }
     const text = await res.text();
     if (res.headers.get('content-type')?.includes('application/json')) {
       const body: unknown = JSON.parse(text);
@@ -75,15 +118,56 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Auth
+export async function registerAccount(email: string, password: string, displayName: string | null): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, displayName }),
+  });
+  const session = await handleResponse<AuthSession>(res);
+  setAuthToken(session.token);
+  return session.user;
+}
+
+export async function loginAccount(email: string, password: string): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const session = await handleResponse<AuthSession>(res);
+  setAuthToken(session.token);
+  return session.user;
+}
+
+export async function logoutAccount(): Promise<void> {
+  const token = getAuthToken();
+  setAuthToken(null);
+  if (!token) return;
+  // Best-effort server-side revocation; the local token is already gone.
+  try {
+    await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+  } catch {
+    // Ignore network failures; the token expires server-side regardless.
+  }
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE}/auth/me`, { headers: authHeaders() });
+  const body = await handleResponse<{ user: AuthUser }>(res);
+  return body.user;
+}
+
 // Skills
 export async function fetchSkills(): Promise<Skill[]> {
-  const res = await fetch(`${API_BASE}/skills`);
+  const res = await fetch(`${API_BASE}/skills`, { headers: authHeaders() });
   return handleResponse<Skill[]>(res);
 }
 export async function createSkill(name: string, parentId: number | null = null): Promise<Skill> {
   const res = await fetch(`${API_BASE}/skills`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify({ name, parentId }),
   });
   return handleResponse<Skill>(res);
@@ -91,7 +175,7 @@ export async function createSkill(name: string, parentId: number | null = null):
 export async function updateSkill(id: number, name: string, parentId?: number | null): Promise<Skill> {
   const res = await fetch(`${API_BASE}/skills/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify({ name, parentId }),
   });
   return handleResponse<Skill>(res);
@@ -99,25 +183,25 @@ export async function updateSkill(id: number, name: string, parentId?: number | 
 export async function updateSkillMinutes(id: number, minutesSpent: number): Promise<Skill> {
   const res = await fetch(`${API_BASE}/skills/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify({ minutesSpent }),
   })
   return handleResponse<Skill>(res)
 }
 export async function deleteSkill(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/skills/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/skills/${id}`, { method: 'DELETE', headers: authHeaders() });
   await requireOk(res);
 }
 
 // Tasks
 export async function fetchTasks(): Promise<Task[]> {
-  const res = await fetch(`${API_BASE}/tasks`);
+  const res = await fetch(`${API_BASE}/tasks`, { headers: authHeaders() });
   return handleResponse<Task[]>(res);
 }
 export async function createTask(name: string, skillId?: number | null): Promise<Task> {
   const res = await fetch(`${API_BASE}/tasks`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify({ name, skillId }),
   });
   return handleResponse<Task>(res);
@@ -125,13 +209,13 @@ export async function createTask(name: string, skillId?: number | null): Promise
 export async function updateTask(id: number, payload: Partial<Task>): Promise<Task> {
   const res = await fetch(`${API_BASE}/tasks/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(payload),
   });
   return handleResponse<Task>(res);
 }
 export async function deleteTask(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE', headers: authHeaders() });
   await requireOk(res);
 }
 
@@ -139,7 +223,7 @@ export async function deleteTask(id: number): Promise<void> {
 export async function addPomodoro(taskId: number, duration: number, completionId: string): Promise<PomodoroLog> {
   const res = await fetch(`${API_BASE}/pomodoros`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify({ taskId, duration, completionId, type: 'timer' }),
   });
   return handleResponse<PomodoroLog>(res);
@@ -172,7 +256,7 @@ export async function fetchPomodoros(options: HistoryOptions = {}): Promise<Sess
   const params = rangeParams(options);
   if (options.limit !== undefined) params.set('limit', String(options.limit));
   if (options.cursor) params.set('cursor', options.cursor);
-  const res = await fetch(`${API_BASE}/pomodoros?${params}`);
+  const res = await fetch(`${API_BASE}/pomodoros?${params}`, { headers: authHeaders() });
   const page = await handleResponse<unknown>(res);
   if (!isSessionPage(page)) {
     throw new Error('Session history response is in an outdated format. Restart or redeploy the backend with the latest code and migrations.');
@@ -189,7 +273,7 @@ function isSessionPage(value: unknown): value is SessionPage {
 }
 
 export async function exportHistory(range: DateRange = {}): Promise<Blob | null> {
-  const res = await fetch(`${API_BASE}/pomodoros/export?${rangeParams(range)}`);
+  const res = await fetch(`${API_BASE}/pomodoros/export?${rangeParams(range)}`, { headers: authHeaders() });
   await requireOk(res);
   if (res.status === 204) return null;
   return res.blob();
@@ -205,7 +289,7 @@ export interface SessionDetails {
 export async function createManualSession(details: SessionDetails): Promise<PomodoroLog> {
   const res = await fetch(`${API_BASE}/pomodoros`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify({ ...details, type: 'manual' }),
   });
   return handleResponse<PomodoroLog>(res);
@@ -214,7 +298,7 @@ export async function createManualSession(details: SessionDetails): Promise<Pomo
 export async function editSession(id: number, details: SessionDetails): Promise<PomodoroLog> {
   const res = await fetch(`${API_BASE}/pomodoros/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(details),
   });
   return handleResponse<PomodoroLog>(res);
@@ -222,6 +306,6 @@ export async function editSession(id: number, details: SessionDetails): Promise<
 
 // Analytics (optional)
 export async function fetchAnalytics(range: DateRange = {}): Promise<AnalyticsSummary> {
-  const res = await fetch(`${API_BASE}/analytics/summary?${rangeParams(range)}`);
+  const res = await fetch(`${API_BASE}/analytics/summary?${rangeParams(range)}`, { headers: authHeaders() });
   return handleResponse<AnalyticsSummary>(res);
 }

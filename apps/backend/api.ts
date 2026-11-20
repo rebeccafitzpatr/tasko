@@ -16,13 +16,13 @@ class SessionRequestError extends Error {
   }
 }
 
-async function resolveSessionAssignment(query: SQL, taskId: number | null, requestedSkillId: number | null) {
+async function resolveSessionAssignment(query: SQL, userId: number, taskId: number | null, requestedSkillId: number | null) {
   if (taskId !== null) {
     const tasks = await query`
       SELECT t.id, t.name AS taskName, t.skill_id AS skillId, s.name AS skillName,
              p.id AS parentSkillId, p.name AS parentSkillName
       FROM tasks t LEFT JOIN skills s ON s.id = t.skill_id
-      LEFT JOIN skills p ON p.id = s.parent_id WHERE t.id = ${taskId}
+      LEFT JOIN skills p ON p.id = s.parent_id WHERE t.id = ${taskId} AND t.user_id = ${userId}
     `
     const task = tasks[0]
     if (!task) throw new SessionRequestError(404, 'Task not found. Choose another task or leave it unassigned.')
@@ -40,7 +40,7 @@ async function resolveSessionAssignment(query: SQL, taskId: number | null, reque
   if (requestedSkillId !== null) {
     const skills = await query`
       SELECT s.id, s.name, p.id AS parentSkillId, p.name AS parentSkillName
-      FROM skills s LEFT JOIN skills p ON p.id = s.parent_id WHERE s.id = ${requestedSkillId}
+      FROM skills s LEFT JOIN skills p ON p.id = s.parent_id WHERE s.id = ${requestedSkillId} AND s.user_id = ${userId}
     `
     if (!skills[0]) throw new SessionRequestError(404, 'Skill not found. Choose another skill or leave it unassigned.')
     const skill = skills[0]
@@ -74,7 +74,7 @@ async function reconcileSessionCounters(transaction: TransactionSQL, taskIds: (n
   }
 }
 
-async function findCompletion(completionId: string) {
+async function findCompletion(completionId: string, userId: number) {
   const rows = await db`
     SELECT id, task_id AS taskId, skill_id AS skillId,
            task_name_snapshot AS taskName, skill_name_snapshot AS skillName,
@@ -83,18 +83,18 @@ async function findCompletion(completionId: string) {
            type, completion_id AS completionId, completion_request AS completionRequest,
            parent_skill_id_snapshot AS parentSkillId, parent_skill_name_snapshot AS parentSkillName,
            skill_path_snapshot AS skillPath
-    FROM pomodoro_logs WHERE completion_id = ${completionId}
+    FROM pomodoro_logs WHERE completion_id = ${completionId} AND user_id = ${userId}
   `
   return rows[0]
 }
 
 // Skills
 
-router.get('/skills', async (_req, res) => {
+router.get('/skills', async (req, res) => {
   try {
     const rows = await db`
       SELECT s.id, s.name, s.parent_id AS parentId, p.name AS parentName, s.minutes_spent AS minutesSpent
-      FROM skills s LEFT JOIN skills p ON p.id = s.parent_id ORDER BY s.id
+      FROM skills s LEFT JOIN skills p ON p.id = s.parent_id WHERE s.user_id = ${req.userId!} ORDER BY s.id
     `
     res.json(rows)
   } catch (e) {
@@ -109,12 +109,13 @@ router.post('/skills', async (req, res) => {
     return res.status(400).json({ error: 'parentId must be a positive integer or null.' })
   }
   try {
+    const userId = req.userId!
     const skill = await db.begin(async transaction => {
-      const rows: SkillNode[] = await transaction`SELECT id, name, parent_id AS parentId FROM skills ORDER BY id FOR UPDATE`
+      const rows: SkillNode[] = await transaction`SELECT id, name, parent_id AS parentId FROM skills WHERE user_id = ${userId} ORDER BY id FOR UPDATE`
       const nodes = rows.map(row => ({ ...row, id: Number(row.id), parentId: row.parentId == null ? null : Number(row.parentId) }))
       const error = validateSkillParent(nodes, null, parentId)
       if (error) throw new SessionRequestError(400, error)
-      await transaction`INSERT INTO skills (name, parent_id, minutes_spent) VALUES (${name.trim()}, ${parentId}, 0)`
+      await transaction`INSERT INTO skills (name, parent_id, minutes_spent, user_id) VALUES (${name.trim()}, ${parentId}, 0, ${userId})`
       const inserted = await transaction`SELECT LAST_INSERT_ID() AS id`
       return { id: Number(inserted[0].id), name: name.trim(), parentId, parentName: nodes.find(node => node.id === parentId)?.name ?? null, minutesSpent: 0 }
     })
@@ -138,19 +139,20 @@ router.put('/skills/:id', async (req, res) => {
     return res.status(400).json({ error: 'minutesSpent must be a non-negative integer.' })
   }
   try {
+    const userId = req.userId!
     const skill = await db.begin(async transaction => {
-      const rows: SkillNode[] = await transaction`SELECT id, name, parent_id AS parentId FROM skills ORDER BY id FOR UPDATE`
+      const rows: SkillNode[] = await transaction`SELECT id, name, parent_id AS parentId FROM skills WHERE user_id = ${userId} ORDER BY id FOR UPDATE`
       const nodes = rows.map(row => ({ ...row, id: Number(row.id), parentId: row.parentId == null ? null : Number(row.parentId) }))
       const current = nodes.find(node => node.id === id)
       if (!current) throw new SessionRequestError(404, 'Skill not found.')
       const nextParent = parentId === undefined ? current.parentId : parentId
       const error = validateSkillParent(nodes, id, nextParent)
       if (error) throw new SessionRequestError(400, error)
-      await transaction`UPDATE skills SET name = ${name === undefined ? current.name : name.trim()}, parent_id = ${nextParent} WHERE id = ${id}`
-      if (minutesSpent !== undefined) await transaction`UPDATE skills SET minutes_spent = ${minutesSpent} WHERE id = ${id}`
+      await transaction`UPDATE skills SET name = ${name === undefined ? current.name : name.trim()}, parent_id = ${nextParent} WHERE id = ${id} AND user_id = ${userId}`
+      if (minutesSpent !== undefined) await transaction`UPDATE skills SET minutes_spent = ${minutesSpent} WHERE id = ${id} AND user_id = ${userId}`
       const updated = await transaction`
         SELECT s.id, s.name, s.parent_id AS parentId, p.name AS parentName, s.minutes_spent AS minutesSpent
-        FROM skills s LEFT JOIN skills p ON p.id = s.parent_id WHERE s.id = ${id}
+        FROM skills s LEFT JOIN skills p ON p.id = s.parent_id WHERE s.id = ${id} AND s.user_id = ${userId}
       `
       return updated[0]
     })
@@ -166,13 +168,14 @@ router.delete('/skills/:id', async (req, res) => {
   const id = Number(req.params.id)
   if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid skill ID.' })
   try {
+    const userId = req.userId!
     await db.begin(async transaction => {
-      const rows: SkillNode[] = await transaction`SELECT id, name, parent_id AS parentId FROM skills ORDER BY id FOR UPDATE`
+      const rows: SkillNode[] = await transaction`SELECT id, name, parent_id AS parentId FROM skills WHERE user_id = ${userId} ORDER BY id FOR UPDATE`
       if (!rows.some(row => Number(row.id) === id)) throw new SessionRequestError(404, 'Skill not found.')
       if (rows.some(row => row.parentId !== null && Number(row.parentId) === id)) {
         throw new SessionRequestError(409, 'Move, promote, or delete sub-skills before deleting their parent.')
       }
-      await transaction`DELETE FROM skills WHERE id = ${id}`
+      await transaction`DELETE FROM skills WHERE id = ${id} AND user_id = ${userId}`
     })
     res.status(204).send()
   } catch (e) {
@@ -183,7 +186,7 @@ router.delete('/skills/:id', async (req, res) => {
 
 // Tasks
 
-router.get('/tasks', async (_req, res) => {
+router.get('/tasks', async (req, res) => {
   try {
     const rows = await db`
       SELECT
@@ -201,6 +204,7 @@ router.get('/tasks', async (_req, res) => {
       FROM tasks t
       LEFT JOIN skills s ON t.skill_id = s.id
       LEFT JOIN skills p ON p.id = s.parent_id
+      WHERE t.user_id = ${req.userId!}
       ORDER BY t.id DESC
     `
     res.json(rows)
@@ -216,9 +220,10 @@ router.post('/tasks', async (req, res) => {
     return res.status(400).json({ error: 'skillId must be a positive integer or null.' })
   }
   try {
-    const assignment = await resolveSessionAssignment(db, null, skillId)
+    const userId = req.userId!
+    const assignment = await resolveSessionAssignment(db, userId, null, skillId)
     const task = await db.begin(async transaction => {
-      await transaction`INSERT INTO tasks (name, skill_id) VALUES (${name.trim()}, ${skillId})`
+      await transaction`INSERT INTO tasks (name, skill_id, user_id) VALUES (${name.trim()}, ${skillId}, ${userId})`
       const rows = await transaction`SELECT LAST_INSERT_ID() AS id`
       return { id: Number(rows[0].id), name: name.trim(), skillId, skillName: assignment.skillName, skillPath: assignment.skillPath }
     })
@@ -238,11 +243,12 @@ router.put('/tasks/:id', async (req, res) => {
     return res.status(400).json({ error: 'skillId must be a positive integer or null.' })
   }
   try {
-    const assignment = await resolveSessionAssignment(db, null, skillId)
+    const userId = req.userId!
+    const assignment = await resolveSessionAssignment(db, userId, null, skillId)
     const task = await db.begin(async transaction => {
-      const previous = await transaction`SELECT id FROM tasks WHERE id = ${id} FOR UPDATE`
+      const previous = await transaction`SELECT id FROM tasks WHERE id = ${id} AND user_id = ${userId} FOR UPDATE`
       if (!previous[0]) throw new SessionRequestError(404, 'Task not found.')
-      await transaction`UPDATE tasks SET name = ${name.trim()}, skill_id = ${skillId} WHERE id = ${id}`
+      await transaction`UPDATE tasks SET name = ${name.trim()}, skill_id = ${skillId} WHERE id = ${id} AND user_id = ${userId}`
       return { id, name: name.trim(), skillId, skillName: assignment.skillName, skillPath: assignment.skillPath }
     })
     res.json(task)
@@ -255,7 +261,7 @@ router.put('/tasks/:id', async (req, res) => {
 router.delete('/tasks/:id', async (req, res) => {
   const { id } = req.params
   try {
-    await db`DELETE FROM tasks WHERE id = ${id}`
+    await db`DELETE FROM tasks WHERE id = ${id} AND user_id = ${req.userId!}`
     res.status(204).send()
   } catch (e) {
     res.status(500).json({ error: (e as Error).message })
@@ -271,10 +277,11 @@ router.post('/pomodoros', async (req, res) => {
   }
 
   const { taskId, skillId: requestedSkillId, duration, type, completionId } = validation.value
+  const userId = req.userId!
   const completionRequest = completionId ? JSON.stringify({ taskId, duration, type }) : null
   try {
     if (completionId) {
-      const existing = await findCompletion(completionId)
+      const existing = await findCompletion(completionId, userId)
       if (existing) {
         const { completionRequest: savedRequest, ...savedSession } = existing
         if (savedRequest !== completionRequest) {
@@ -284,7 +291,7 @@ router.post('/pomodoros', async (req, res) => {
       }
     }
     const { taskName, skillName, skillId: canonicalSkillId, parentSkillId, parentSkillName, skillPath } =
-      await resolveSessionAssignment(db, taskId, requestedSkillId)
+      await resolveSessionAssignment(db, userId, taskId, requestedSkillId)
 
     const completedAt = type === 'timer'
       ? new Date()
@@ -297,11 +304,11 @@ router.post('/pomodoros', async (req, res) => {
           (task_id, skill_id, task_name_snapshot, skill_name_snapshot,
            duration_minutes, completed_at, completed_at_is_utc, type,
            completion_id, completion_request,
-           parent_skill_id_snapshot, parent_skill_name_snapshot, skill_path_snapshot)
+           parent_skill_id_snapshot, parent_skill_name_snapshot, skill_path_snapshot, user_id)
         VALUES
           (${taskId}, ${canonicalSkillId}, ${taskName}, ${skillName},
            ${duration}, ${completedAtUtc}, TRUE, ${type},
-           ${completionId}, ${completionRequest}, ${parentSkillId}, ${parentSkillName}, ${skillPath})
+           ${completionId}, ${completionRequest}, ${parentSkillId}, ${parentSkillName}, ${skillPath}, ${userId})
       `
       if (taskId !== null) {
         await transaction`
@@ -338,7 +345,7 @@ router.post('/pomodoros', async (req, res) => {
     }
     if (completionId && e instanceof SQL.MySQLError && e.errno === 1062) {
       try {
-        const existing = await findCompletion(completionId)
+        const existing = await findCompletion(completionId, userId)
         if (existing && existing.completionRequest === completionRequest) {
           const { completionRequest: _savedRequest, ...savedSession } = existing
           return res.status(200).json(savedSession)
@@ -365,6 +372,7 @@ router.put('/pomodoros/:id', async (req, res) => {
   const completedAtUtc = completedAt.toISOString().slice(0, 19).replace('T', ' ')
 
   try {
+    const userId = req.userId!
     const session = await db.begin(async transaction => {
       const rows = await transaction`
         SELECT id, task_id AS taskId, skill_id AS skillId,
@@ -372,7 +380,7 @@ router.put('/pomodoros/:id', async (req, res) => {
                type, completion_id AS completionId,
                parent_skill_id_snapshot AS parentSkillId, parent_skill_name_snapshot AS parentSkillName,
                skill_path_snapshot AS skillPath
-        FROM pomodoro_logs WHERE id = ${id} FOR UPDATE
+        FROM pomodoro_logs WHERE id = ${id} AND user_id = ${userId} FOR UPDATE
       `
       const previous = rows[0]
       if (!previous) throw new SessionRequestError(404, 'Session not found. Refresh history and try again.')
@@ -385,14 +393,14 @@ router.put('/pomodoros/:id', async (req, res) => {
           parentSkillId: previous.parentSkillId ?? null, parentSkillName: previous.parentSkillName ?? null,
           skillPath: previous.skillPath ?? previous.skillName ?? null,
         }
-        : await resolveSessionAssignment(transaction, taskId, skillId)
+        : await resolveSessionAssignment(transaction, userId, taskId, skillId)
       await transaction`
         UPDATE pomodoro_logs SET task_id = ${taskId}, skill_id = ${assignment.skillId},
           task_name_snapshot = ${assignment.taskName}, skill_name_snapshot = ${assignment.skillName},
           duration_minutes = ${duration}, completed_at = ${completedAtUtc}, completed_at_is_utc = TRUE,
           parent_skill_id_snapshot = ${assignment.parentSkillId}, parent_skill_name_snapshot = ${assignment.parentSkillName},
           skill_path_snapshot = ${assignment.skillPath}
-        WHERE id = ${id}
+        WHERE id = ${id} AND user_id = ${userId}
       `
       await reconcileSessionCounters(transaction, [oldTaskId, taskId], [oldSkillId, assignment.skillId])
       return {
@@ -430,6 +438,7 @@ router.get('/pomodoros/export', async (req, res) => {
       LEFT JOIN skills s ON s.id = pl.skill_id
       WHERE (${start} IS NULL OR pl.completed_at >= ${start})
         AND (${end} IS NULL OR pl.completed_at < ${end})
+        AND pl.user_id = ${req.userId!}
       ORDER BY pl.completed_at DESC, pl.id DESC
     `
     if (logs.length === 0) return res.status(204).send()
@@ -470,6 +479,7 @@ router.get('/pomodoros', async (req, res) => {
         AND (${end} IS NULL OR pl.completed_at < ${end})
         AND (${beforeTime} IS NULL OR pl.completed_at < ${beforeTime}
           OR (pl.completed_at = ${beforeTime} AND pl.id < ${beforeId}))
+        AND pl.user_id = ${req.userId!}
       ORDER BY pl.completed_at DESC, pl.id DESC
       LIMIT ${limit + 1}
     `
@@ -499,12 +509,14 @@ router.get('/analytics/summary', async (req, res) => {
   const yearStart = sqlTime(zonedMidnight(local.year, 1, 1))
   const nowTime = sqlTime(now)
   try {
+    const userId = req.userId!
     const totals = (await db`
       SELECT COUNT(*) AS c, COALESCE(SUM(duration_minutes), 0) AS m FROM pomodoro_logs
       WHERE (${start} IS NULL OR completed_at >= ${start})
         AND (${end} IS NULL OR completed_at < ${end})
+        AND user_id = ${userId}
     `)[0];
-    const totalTasks = (await db`SELECT COUNT(*) AS c FROM tasks`)[0]?.c ?? 0;
+    const totalTasks = (await db`SELECT COUNT(*) AS c FROM tasks WHERE user_id = ${userId}`)[0]?.c ?? 0;
 
     const breakdown: {
       skillId: number; skillName: string; pomodoros: number; minutes: number;
@@ -530,6 +542,8 @@ router.get('/analytics/summary', async (req, res) => {
       LEFT JOIN pomodoro_logs pl ON (pl.skill_id = s.id OR pl.parent_skill_id_snapshot = s.id)
         AND (${start} IS NULL OR pl.completed_at >= ${start})
         AND (${end} IS NULL OR pl.completed_at < ${end})
+        AND pl.user_id = ${userId}
+      WHERE s.user_id = ${userId}
       GROUP BY s.id, s.name, s.parent_id, p.id, p.name
       ORDER BY s.id
     `;

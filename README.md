@@ -6,6 +6,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 
 ## Features as of now:
 
+- create user accounts with email + password; all tasks, skills and sessions are private to the signed-in user, and the first account to register claims any existing single-user data
 - create new tasks and complete pomodoro sessions towards those tasks
 - assign tasks to skills, so all pomodoro session times go towards skills
 - create standalone skills or one-level sub-skills, assign either to tasks, and retain recorded skill paths after moves/deletions
@@ -27,19 +28,24 @@ Its really driven by the fact that I really wish that something this intuitive w
 
 ### Technical Details
 
-- apps/backend/types.ts — TypeScript interfaces for Task, Skill, PomodoroLog
-- apps/backend/api.ts — Express router with all API endpoints
+- apps/backend/types.ts — TypeScript interfaces for User, Task, Skill, PomodoroLog
+- apps/backend/api.ts — Express router with all API endpoints (every query scoped to the authenticated user)
+- apps/backend/auth.ts — register/login/logout/me endpoints and the requireAuth bearer-token middleware; passwords hashed with Bun.password (argon2id), tokens stored as SHA-256 hashes with a 30-day expiry
 - backend/index.ts — mount API routes and initialize DB (updated)
 - Session logs are the source of truth for time analytics; task and skill minute totals are compatibility counters.
 - Session validation, timestamp rules, deletion snapshots, and migration steps are documented in [migrations/session-history.md](./migrations/session-history.md).
 - Timer recovery and retry-safe completion require [20261106_timer_completion.sql](./migrations/20261106_timer_completion.sql) after the session-history migration, before deploying the updated app.
 - Skill hierarchy requires [20261106_skill_hierarchy.sql](./migrations/20261106_skill_hierarchy.sql) after both earlier migrations, before deploying the updated API/client. Existing skills remain standalone.
+- User accounts require [20261120_user_accounts.sql](./migrations/20261120_user_accounts.sql) after all earlier migrations, before deploying the updated API/client. Existing rows stay unowned until the first account registers and claims them; skill names become unique per user.
 
 ### Stores
 
 * taskStore.ts
 
   * load, add, update and delete tasks. Also record a completed Pomodoro for a task
+* authStore.ts
+
+  * current user, login/register/logout, session restore on app start; clears cached per-user data when the account changes
 * skillStore.ts
 
   * load, add skills; update skill names, update skill minutes, delete skills
@@ -50,6 +56,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 ### Views
 
 * TasksView.vue : create task and view all tasks
+* LoginView.vue : log in or create an account; unauthenticated visitors are redirected here
 * SkillsView.vue : create skill form and view all skills
 * PomodoroView.vue : select task, set time, start/pause/reset task and pomodoro timer TimerCircle.vue
 * AnalyticsView.vue : Total tasks, pomodoros and minutes, per skill task and pomodoro counts.

@@ -1,29 +1,54 @@
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  display_name VARCHAR(255) NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Opaque bearer tokens; only the SHA-256 hash of a token is stored.
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  CONSTRAINT fk_auth_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS skills (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL UNIQUE,
+  name VARCHAR(255) NOT NULL,
+  user_id BIGINT NULL,
   parent_id BIGINT NULL,
   minutes_spent BIGINT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_skills_parent FOREIGN KEY (parent_id) REFERENCES skills(id) ON DELETE RESTRICT
+  UNIQUE KEY uq_skills_user_name (user_id, name),
+  CONSTRAINT fk_skills_parent FOREIGN KEY (parent_id) REFERENCES skills(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_skills_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
+  user_id BIGINT NULL,
   skill_id BIGINT,
   status ENUM('backlog','active','completed') NOT NULL DEFAULT 'active',
   completed_pomodoros BIGINT NOT NULL DEFAULT 0,
   minutes_spent BIGINT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE SET NULL
+  FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE SET NULL,
+  CONSTRAINT fk_tasks_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Session logs are the source of truth; task/skill minute counters are compatibility caches.
 -- Snapshots preserve labels when ON DELETE SET NULL detaches a historical session.
 CREATE TABLE IF NOT EXISTS pomodoro_logs (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NULL,
   task_id BIGINT,
   skill_id BIGINT,
   task_name_snapshot VARCHAR(255) NULL,
@@ -40,10 +65,14 @@ CREATE TABLE IF NOT EXISTS pomodoro_logs (
   CONSTRAINT chk_pomodoro_duration_positive CHECK (duration_minutes > 0),
   UNIQUE KEY uq_logs_completion_id (completion_id),
   FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
-  FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE SET NULL
+  FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE SET NULL,
+  CONSTRAINT fk_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Optional indexes for performance
 CREATE INDEX idx_logs_task ON pomodoro_logs (task_id);
 CREATE INDEX idx_logs_skill ON pomodoro_logs (skill_id);
 CREATE INDEX idx_logs_completed_at ON pomodoro_logs (completed_at);
+CREATE INDEX idx_tasks_user ON tasks (user_id);
+CREATE INDEX idx_logs_user ON pomodoro_logs (user_id);
+CREATE INDEX idx_tokens_expires ON auth_tokens (expires_at);

@@ -4,6 +4,7 @@ import { SQL } from 'bun'
 import path from 'path';
 
 import apiRouter from './api.js';
+import authRouter, { requireAuth } from './auth.js';
 
 const dbUrl = process.env.MYSQL_PUBLIC_URL;
 if (!dbUrl) {
@@ -51,7 +52,8 @@ try {
   process.exit(1);
 }
 
-  app.use('/api', apiRouter);
+  app.use('/api/auth', authRouter);
+  app.use('/api', requireAuth, apiRouter);
 
 
 
