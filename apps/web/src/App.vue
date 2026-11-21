@@ -5,14 +5,17 @@
       
       <h2 class="logo"> TASKO </h2>
 
+      <div v-if="auth.isAuthenticated" class="nav-user">
+        <span class="user-label" :title="auth.user?.email ?? ''">{{ auth.displayLabel }}</span>
+        <button class="logout-button" type="button" @click="logout">Log out</button>
+      </div>
+
       <div v-if="auth.isAuthenticated" class="nav-links">
         <router-link to="/tasks">Tasks</router-link>  
         <router-link to="/skills">Skills</router-link> 
         <router-link to="/pomodoro">Pomodoro</router-link> 
         <router-link to="/analytics">Analytics</router-link>
         <router-link to="/settings">Settings</router-link>
-        <span class="user-label" :title="auth.user?.email">{{ auth.displayLabel }}</span>
-        <button class="logout-button" type="button" @click="logout">Log out</button>
       </div>
     </nav>
   
@@ -47,63 +50,79 @@
 </script>
 
 <style>
-nav {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-height: 38px;
-  padding: 0px 12px;
-  box-sizing: border-box;
-  background-color: var(--theme-medium);
-  border-radius: 8px;
-  box-shadow: 3px 4px 0 rgba(0,0,0,0.18);
+/* Base nav, link, and logo styling lives in style.css; this block arranges the
+   two-row layout: logo + account on top, evenly spread links below. */
+
+.centered-container nav {
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
 }
 
-.logo {
-  margin: 0 14px;
-  font-size: 1.3rem;
+.centered-container nav .logo {
+  margin: 0 2px;
 }
 
-.nav-links {
+.nav-user {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
   margin-left: auto;
 }
 
-nav a {
-  display: block;
-  padding: 8px 12px;
-  background-color: var(--surface);
-  border: 2px solid var(--theme-color);
-  border-radius: 8px;
-  text-decoration: none;
-  color: var(--text-strong);
+.centered-container nav .nav-links {
+  flex-basis: 100%;
+  margin-left: 0;
 }
 
-.router-link-active {
-  background-color: var(--theme-color);
-  color: var(--text-on-accent);
+.centered-container nav .nav-links a {
+  flex: 1 1 0;
+  text-align: center;
 }
 
 .user-label {
-  margin-left: 8px;
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 0.9rem;
   font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .logout-button {
-  padding: 8px 12px;
-  font: inherit;
+  min-height: 36px;
+  padding: 6px 12px;
   color: var(--text-strong);
-  background-color: var(--surface);
-  border: 2px solid var(--theme-color);
-  border-radius: 8px;
+  font: inherit;
+  font-size: 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
   cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
-.logout-button:hover {
-  background-color: var(--theme-color);
+.logout-button:hover:not(:disabled) {
   color: var(--text-on-accent);
+  background: var(--theme-color);
+  border-color: var(--theme-color);
+}
+
+@media (max-width: 700px) {
+  .nav-user {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
+
+  .user-label {
+    max-width: 70%;
+  }
 }
 
 </style>
