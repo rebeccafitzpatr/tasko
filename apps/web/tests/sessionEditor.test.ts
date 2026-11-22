@@ -192,8 +192,8 @@ describe('session history and analytics refresh', () => {
     expect(fetchPomodoros).toHaveBeenLastCalledWith({ limit: 25, cursor: 'older-cursor' })
     expect(wrapper.find('tbody').text()).toContain('Older session')
     expect(wrapper.findAll('button').find(button => button.text() === 'Newer sessions')!.attributes('disabled')).toBeUndefined()
-    expect(wrapper.find('.skill-metrics').text()).toContain('235 min')
-    expect(wrapper.find('.skill-periods').text()).toContain('140')
+    expect(wrapper.find('.skill-stats').text()).toContain('235 sessions')
+    expect(wrapper.find('.skill-stats').text()).toContain('140 mins')
     expect(wrapper.findAll('button').find(button => button.text() === 'Older sessions')!.attributes('disabled')).toBeDefined()
     vi.mocked(fetchPomodoros).mockResolvedValueOnce({
       items: [manual], hasMore: true, nextCursor: 'older-cursor', limit: 25,

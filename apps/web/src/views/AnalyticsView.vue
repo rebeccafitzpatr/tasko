@@ -6,44 +6,48 @@
     <button v-if="loadError" :disabled="isRefreshing" @click="loadData(true)">Retry loading</button>
     <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
     <p v-if="isRefreshing" role="status">Loading analytics...</p>
-    <div v-if="analyticsMatchesRange" class="analytics-summary card">
-      <div class="summary-item">
-        <span class="summary-label">Total tasks</span>
-        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
-        <span v-else class="summary-value">{{ analyticsStore.summary.totalTasks }}</span>
+    <div v-if="analyticsMatchesRange" class="card skill-section">
+      <div class="skill-section-header">
+        <h2>Time spent per skill</h2>
+        <div class="skill-period-toggle" role="group" aria-label="Minutes period">
+          <button type="button" :class="{ active: skillPeriod === 'today' }" @click="skillPeriod = 'today'">today</button>
+          <span aria-hidden="true">/</span>
+          <button type="button" :class="{ active: skillPeriod === 'week' }" @click="skillPeriod = 'week'">this week</button>
+          <span aria-hidden="true">/</span>
+          <button type="button" :class="{ active: skillPeriod === 'year' }" @click="skillPeriod = 'year'">this year</button>
+        </div>
       </div>
-      <div class="summary-item">
-        <span class="summary-label">Total sessions</span>
-        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
-        <span v-else class="summary-value">{{ analyticsStore.summary.totalPomodoros }}</span>
-      </div>
-      <div class="summary-item">
-        <span class="summary-label">Total time spent</span>
-        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
-        <span v-else class="summary-value">{{ analyticsStore.summary.totalMinutes }} min</span>
-      </div>
-    </div>
-    <p v-if="analyticsMatchesRange && !isRefreshing && analyticsStore.summary.totalPomodoros === 0">No sessions in the selected range. Totals are zero.</p>
-    <div v-if="analyticsMatchesRange" class="card">
-      <h2>Time spent per skill</h2>
       <ul class="skill-list">
-        <li v-for="skill in skills" :key="skill.id" class="skill-card">
-          <div class="skill-title">{{ skillLabel(skill, skills) }}</div>
-          <div class="skill-metrics">
-            <span>{{ countTasksForSkill(skill.id) }} tasks</span>
+        <li v-for="skill in skills" :key="skill.id" class="skill-row">
+          <span class="skill-name">{{ skillLabel(skill, skills) }}</span>
+          <span class="skill-stats">
+            <span>{{ countTasksForSkill(skill.id) }} {{ countTasksForSkill(skill.id) === 1 ? 'task' : 'tasks' }}</span>
             <span>{{ totalPomodorosForSkill(skill.id) }} sessions</span>
-            <span>{{ totalMinutesForSkill(skill.id) }} min</span>
-          </div>
-          <div class="skill-periods">
-            <span>Today: <b>{{ skillSummary(skill.id)?.todayMinutes ?? 0 }}</b> min</span>
-            <span>This week: <b>{{ skillSummary(skill.id)?.weekMinutes ?? 0 }}</b> min</span>
-            <span>This year: <b>{{ skillSummary(skill.id)?.yearMinutes ?? 0 }}</b> min</span>
-          </div>
+            <span>{{ periodMinutesForSkill(skill.id) }} mins</span>
+          </span>
         </li>
       </ul>
     </div>
     <div class="card">
-      <h2>Session history</h2>
+      <h2 class="history-heading">Session History</h2>
+      <div v-if="analyticsMatchesRange" class="analytics-summary">
+        <div class="summary-item">
+          <span class="summary-label">Total tasks</span>
+          <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+          <span v-else class="summary-value">{{ analyticsStore.summary.totalTasks }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Total sessions</span>
+          <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+          <span v-else class="summary-value">{{ analyticsStore.summary.totalPomodoros }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Total time spent</span>
+          <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+          <span v-else class="summary-value">{{ analyticsStore.summary.totalMinutes }} min</span>
+        </div>
+      </div>
+      <p v-if="analyticsMatchesRange && !isRefreshing && analyticsStore.summary.totalPomodoros === 0">No sessions in the selected range. Totals are zero.</p>
       <div class="history-actions">
         <div class="history-action-group">
           <button :disabled="rangeBusy" @click="openEditor(null)">Add manual session</button>
@@ -284,8 +288,13 @@ function totalPomodorosForSkill(skillId: number) {
   return skillSummary(skillId)?.pomodoros ?? 0
 }
 
-function totalMinutesForSkill(skillId: number) {
-  return skillSummary(skillId)?.minutes ?? 0
+const skillPeriod = ref<'today' | 'week' | 'year'>('today')
+
+function periodMinutesForSkill(skillId: number) {
+  const summary = skillSummary(skillId)
+  if (skillPeriod.value === 'today') return summary?.todayMinutes ?? 0
+  if (skillPeriod.value === 'week') return summary?.weekMinutes ?? 0
+  return summary?.yearMinutes ?? 0
 }
 
 function skillSummary(skillId: number) {
@@ -347,7 +356,10 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
   border-top: 4px solid var(--theme-color);
+  border-radius: 8px;
   background: color-mix(in srgb, var(--theme-color), var(--surface) 92%);
 }
 
@@ -371,67 +383,91 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
   font-weight: bold;
 }
 
-.skill-list {
+.history-heading {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.skill-section {
+  padding: 1.25rem 1rem;
+  background: color-mix(in srgb, var(--theme-color), var(--surface) 94%);
+}
+
+.skill-section-header {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.skill-section-header h2 {
+  margin: 0;
+}
+
+.skill-period-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.skill-period-toggle button {
+  min-height: 0;
+  padding: 0;
+  color: var(--text);
+  font-size: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.skill-period-toggle button:hover:not(:disabled) {
+  color: var(--theme-text);
+  background: none;
+  border: none;
+}
+
+.skill-period-toggle button.active {
+  color: var(--text-strong);
+  font-weight: 700;
+}
+
+.skill-list {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   min-width: 0;
-  gap: 0.75rem;
+  gap: 0.9rem;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-.skill-card {
-  min-width: 0;
-  flex: 1 1 180px;
-  padding: 1rem;
-  background: var(--surface-muted);
-  border-radius: 8px;
+.skill-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: baseline;
+  gap: 1.25rem;
   overflow-wrap: anywhere;
 }
 
-.skill-title {
-  margin-bottom: 0.5rem;
-  font-weight: bold;
-}
-
-.skill-metrics,
-.skill-periods {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-}
-
-.skill-metrics {
-  margin-bottom: 0.5rem;
-  padding: 0px 6px;
+.skill-name {
   color: var(--text-strong);
-  font-size: 0.7rem;
-  justify-content:space-between;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: right;
 }
 
-.skill-periods {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  width: 100%;
-  color: var(--text);
+.skill-stats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  color: var(--text-strong);
   font-size: 0.9rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.skill-periods span {
-  min-width: 0;
-  padding: 0.6rem 0.45rem;
-  text-align: center;
-  border-right: 1px solid var(--border);
-}
-
-.skill-periods span:last-child {
-  border-right: 0;
 }
 
 .analytics-table {
