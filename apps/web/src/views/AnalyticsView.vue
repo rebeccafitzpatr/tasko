@@ -5,18 +5,6 @@
     <p v-if="loadError" role="alert">{{ loadError }}</p>
     <button v-if="loadError" :disabled="isRefreshing" @click="loadData(true)">Retry loading</button>
     <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
-    <form class="history-filters" @submit.prevent="applyRange">
-      <label>Period (NZ)
-        <select v-model="selectedPeriod" name="period" :disabled="rangeBusy" @change="choosePeriod">
-          <option v-for="period in reportPeriods" :key="period.value" :value="period.value">{{ period.label }}</option>
-        </select>
-      </label>
-      <label>Start date (NZ)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
-      <label>End date (NZ)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
-      <button :disabled="rangeBusy">Apply dates</button>
-      <button type="button" :disabled="rangeBusy" @click="clearRange">All dates</button>
-    </form>
-    <p v-if="rangeError" role="alert">{{ rangeError }}</p>
     <label class="compare-toggle"><input v-model="compareEnabled" name="compare" type="checkbox" :disabled="rangeBusy" @change="loadComparison" />
       Compare with the prior equal-length period</label>
     <section v-if="compareEnabled" class="comparison card" aria-label="Prior period comparison">
@@ -80,9 +68,24 @@
     <div class="card">
       <h2>Session history</h2>
       <div class="history-actions">
-        <button :disabled="rangeBusy" @click="openEditor(null)">Add manual session</button>
-        <button :disabled="rangeBusy" @click="exportSessions">{{ isExporting ? 'Exporting...' : 'Export CSV' }}</button>
+        <div class="history-action-group">
+          <button :disabled="rangeBusy" @click="openEditor(null)">Add manual session</button>
+          <button :disabled="rangeBusy" @click="exportSessions">{{ isExporting ? 'Exporting...' : 'Export CSV' }}</button>
+        </div>
+        <button class="filter-toggle" type="button" :aria-expanded="filtersOpen" @click="filtersOpen = !filtersOpen">
+          {{ filtersOpen ? 'Hide filter' : hasActiveFilter ? 'Filter ●' : 'Filter' }}
+        </button>
       </div>
+      <form v-show="filtersOpen" class="history-filters" @submit.prevent="applyRange">
+        <label>Period (NZ)
+          <select v-model="selectedPeriod" name="period" :disabled="rangeBusy" @change="choosePeriod">
+            <option v-for="period in reportPeriods" :key="period.value" :value="period.value">{{ period.label }}</option>
+          </select>
+        </label>
+        <label>Start date (NZ)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" @change="applyCustomDates" /></label>
+        <label>End date (NZ)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" @change="applyCustomDates" /></label>
+      </form>
+      <p v-if="rangeError" role="alert">{{ rangeError }}</p>
       <p v-if="isExporting" role="status">Exporting all matching sessions...</p>
       <p v-if="exportMessage" role="status">{{ exportMessage }}</p>
       <p v-if="exportError" role="alert">{{ exportError }} Retry with Export CSV.</p>
@@ -158,6 +161,7 @@ const isRefreshing = ref(false)
 const historyLoading = ref(false)
 const historyError = ref('')
 const rangeError = ref('')
+const filtersOpen = ref(false)
 const startDate = ref('')
 const endDate = ref('')
 const appliedRange = ref<DateRange>({})
@@ -166,6 +170,7 @@ const isExporting = ref(false)
 const exportError = ref('')
 const exportMessage = ref('')
 const rangeBusy = computed(() => isRefreshing.value || historyLoading.value || editorOpen.value || isExporting.value)
+const hasActiveFilter = computed(() => Boolean(appliedRange.value.start || appliedRange.value.end))
 const compareEnabled = ref(false)
 const comparisonLoading = ref(false)
 const comparisonError = ref('')
@@ -221,10 +226,8 @@ async function applyRange() {
   await loadData(true)
 }
 
-function clearRange() {
-  selectedPeriod.value = 'all'
-  startDate.value = ''
-  endDate.value = ''
+function applyCustomDates() {
+  selectedPeriod.value = 'custom'
   return applyRange()
 }
 
@@ -378,6 +381,9 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
 .history-filters label { display: flex; flex-direction: column; gap: 0.4rem; text-align: left; }
 .history-filters label { flex: 1 1 160px; min-width: 0; }
 .history-filters input, .history-filters select { width: 100%; min-width: 0; box-sizing: border-box; }
+.history-actions { justify-content: space-between; }
+.history-action-group { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.history-actions .filter-toggle { margin-left: auto; }
 .compare-toggle { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
 .comparison { overflow-wrap: anywhere; }
 .comparison-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 1rem; }

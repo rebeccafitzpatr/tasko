@@ -38,12 +38,31 @@ afterEach(() => {
   vi.useRealTimers()
 })
 async function customRange(wrapper: ReturnType<typeof mount>) {
+  // Each committed date auto-applies and briefly disables the form, so settle between edits.
   await wrapper.get('[name="start"]').setValue('2026-01-08')
+  await flushPromises()
   await wrapper.get('[name="end"]').setValue('2026-01-14')
-  await wrapper.get('.history-filters').trigger('submit')
   await flushPromises()
 }
 describe('analytics periods and comparisons', () => {
+  it('hides the date filters until Filter is toggled, keeping applied dates intact', async () => {
+    const wrapper = await render()
+    const filters = wrapper.get('.history-filters')
+    const toggle = wrapper.get('.filter-toggle')
+    // jsdom has no layout engine, so check the v-show inline style directly.
+    const filtersHidden = () => (filters.attributes('style') ?? '').includes('display: none')
+    expect(filtersHidden()).toBe(true)
+    expect(toggle.text()).toBe('Filter')
+    await toggle.trigger('click')
+    expect(filtersHidden()).toBe(false)
+    expect(toggle.text()).toBe('Hide filter')
+    await customRange(wrapper)
+    await toggle.trigger('click')
+    expect(filtersHidden()).toBe(true)
+    // The applied range still filters history and is flagged on the button.
+    expect(toggle.text()).toContain('Filter ●')
+    expect(fetchPomodoros).toHaveBeenLastCalledWith(expect.objectContaining({ start: '2026-01-08', end: '2026-01-14' }))
+  })
   it('applies presets to all reports and supports custom dates', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-11-06T10:00:00Z'))
@@ -69,7 +88,8 @@ describe('analytics periods and comparisons', () => {
     expect(wrapper.get('.skill-comparison').text()).toContain('Prior: 20 min / 1 sessions')
     expect(wrapper.get('.analytics-summary').text()).toContain('60 min')
     expect(wrapper.findAll('.skill-comparison')[1]?.text()).toContain('No activity in either period')
-    expect(fetchPomodoros).toHaveBeenCalledTimes(2)
+    // Initial page plus one auto-apply per committed date; comparing does not reload history.
+    expect(fetchPomodoros).toHaveBeenCalledTimes(3)
   })
   it('explains all-time comparisons, empty results and zero baselines', async () => {
     const wrapper = await render()
@@ -119,8 +139,11 @@ describe('analytics periods and comparisons', () => {
   })
   it('shows current analytics errors without falsely displaying zero totals for a new range', async () => {
     const wrapper = await render()
+    await wrapper.get('[name="start"]').setValue('2026-01-08')
+    await flushPromises()
     vi.mocked(fetchAnalytics).mockRejectedValueOnce(new Error('Analytics unavailable'))
-    await customRange(wrapper)
+    await wrapper.get('[name="end"]').setValue('2026-01-14')
+    await flushPromises()
     expect(wrapper.find('.analytics-summary').exists()).toBe(false)
     expect(wrapper.get('[role="alert"]').text()).toContain('Analytics unavailable')
     await wrapper.findAll('button').find(button => button.text() === 'Retry loading')!.trigger('click')
