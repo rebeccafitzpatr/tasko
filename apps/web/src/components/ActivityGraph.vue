@@ -42,7 +42,7 @@
         :key="group.key"
         class="task-session-group"
       >
-        <strong>{{ group.name }} — {{ group.minutes }} minutes</strong>
+        <strong>{{ group.skillName }} — {{ group.name }} — {{ group.minutes }} minutes</strong>
         <ul>
           <li
             v-for="(session, index) in group.sessions"
@@ -103,15 +103,17 @@ function addDays(date: Date, amount: number) {
 }
 
 const activityByDay = computed(() => {
-  const map = new Map<string, { minutes: number; taskIds: Set<number> }>()
+  const map = new Map<string, { minutes: number; taskIds: Set<number>; skill: string }>()
 
   for (const log of props.logs) {
     const key = dateKey(new Date(log.completedAt))
-    const activity = map.get(key) ?? { minutes: 0, taskIds: new Set<number>() }
+    const activity = map.get(key) ?? { minutes: 0, taskIds: new Set<number>(), skill: "Unknown Skill" }
 
     activity.minutes += log.duration ?? 0
+    activity.skill = log.skillName ?? "Unknown Skill"
     if (typeof log.taskId === 'number') {
       activity.taskIds.add(log.taskId)
+      
     }
 
     map.set(key, activity)
@@ -200,6 +202,7 @@ const selectedDayTaskGroups = computed(() => {
 
   return [...groups.entries()].map(([taskId, sessions]) => ({
     key: taskId === null ? 'unlinked' : String(taskId),
+    skillName: sessions[0].skillName ?? 'Unknown Skill',
     name: taskId === null
       ? 'Unlinked sessions'
       : props.tasks.find(task => task.id === taskId)?.name ?? `Task #${taskId}`,
@@ -294,6 +297,14 @@ const activeDays = computed(() => daysList.value.filter(day => day.minutes > 0).
 
 .task-session-group ul {
   margin: 0.25rem 0 0.75rem;
+  padding: 0;
+}
+
+.task-session-group li {
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
+  list-style: none;
+  text-align: center;
 }
 
 .level-0 { background: color-mix(in srgb, var(--theme-color), var(--surface) 94%); }

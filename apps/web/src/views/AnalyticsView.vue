@@ -134,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch, onBeforeUnmount } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
@@ -179,6 +179,26 @@ const currentCursor = ref<string | null>(null)
 const previousCursors = ref<(string | null)[]>([])
 type PageAction = 'first' | 'next' | 'previous'
 let retryPage: { cursor: string | null; action: PageAction } = { cursor: null, action: 'first' }
+
+let previousBodyOverflow = ''
+let previousHtmlOverflow = ''
+
+watch(activityOpen, (isOpen) => {
+  if (isOpen) {
+    previousBodyOverflow = document.body.style.overflow
+    previousHtmlOverflow = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = previousBodyOverflow
+    document.documentElement.style.overflow = previousHtmlOverflow
+  }
+})
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = previousBodyOverflow
+  document.documentElement.style.overflow = previousHtmlOverflow
+})
 
 async function loadHistory(cursor: string | null, action: PageAction) {
   if (historyLoading.value) return
@@ -556,6 +576,8 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
   justify-content: center;
   padding: 1rem;
   background: rgba(0, 0, 0, 0.45);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .activity-modal {
