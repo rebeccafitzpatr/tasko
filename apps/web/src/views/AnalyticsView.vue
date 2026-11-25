@@ -64,7 +64,7 @@
           <div class="modal-header">
             <div>
               <h2 id="activity-title">Activity graph</h2>
-              <p>Daily study minutes for the selected date range.</p>
+              <p>Daily study minutes for the last year.</p>
             </div>
             <button type="button" aria-label="Close activity graph" @click="activityOpen = false">×</button>
           </div>
@@ -240,7 +240,7 @@ async function openActivityGraph() {
   activityLoading.value = true
   activityError.value = ''
   try {
-    activityLogs.value = await fetchActivityPomodoros(appliedRange.value)
+    activityLogs.value = await fetchActivityPomodoros({})
   } catch (cause) {
     activityError.value = cause instanceof Error ? cause.message : 'Could not load activity graph.'
   } finally {

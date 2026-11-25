@@ -270,9 +270,19 @@ export async function fetchPomodoros(options: HistoryOptions = {}): Promise<Sess
   return page;
 }
 
-export async function fetchActivityPomodoros(range: DateRange = {}, limit = 5000): Promise<PomodoroLog[]> {
-  const page = await fetchPomodoros({ ...range, limit })
-  return page.items
+export async function fetchActivityPomodoros(): Promise<PomodoroLog[]> {
+  const sessions: PomodoroLog[] = []
+  let cursor: string | undefined
+
+  while (true) {
+    const page = await fetchPomodoros({ limit: 100, cursor })
+    sessions.push(...page.items)
+
+    if (!page.hasMore || !page.nextCursor) break
+    cursor = page.nextCursor
+  }
+
+  return sessions
 }
 
 function isSessionPage(value: unknown): value is SessionPage {
