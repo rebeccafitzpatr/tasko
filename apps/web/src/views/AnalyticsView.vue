@@ -51,10 +51,27 @@
         <div class="history-action-group">
           <button :disabled="rangeBusy" @click="openEditor(null)">Add manual session</button>
           <button :disabled="rangeBusy" @click="exportSessions">{{ isExporting ? 'Exporting...' : 'Export CSV' }}</button>
+          <button :disabled="rangeBusy || activityLoading" @click="openActivityGraph">
+            {{ activityLoading ? 'Loading graph...' : 'Activity graph' }}
+          </button>
         </div>
         <button class="filter-toggle" type="button" :aria-expanded="filtersOpen" @click="filtersOpen = !filtersOpen">
           {{ filtersOpen ? 'Hide filter' : hasActiveFilter ? 'Filter ●' : 'Filter' }}
         </button>
+      </div>
+      <div v-if="activityOpen" class="modal-backdrop" role="presentation" @click.self="activityOpen = false">
+        <section class="activity-modal" role="dialog" aria-modal="true" aria-labelledby="activity-title">
+          <div class="modal-header">
+            <div>
+              <h2 id="activity-title">Activity graph</h2>
+              <p>Daily study minutes for the selected date range.</p>
+            </div>
+            <button type="button" aria-label="Close activity graph" @click="activityOpen = false">×</button>
+          </div>
+          <p v-if="activityError" role="alert">{{ activityError }}</p>
+          <p v-else-if="activityLoading" role="status">Loading activity...</p>
+          <ActivityGraph v-else :logs="activityLogs" />
+        </section>
       </div>
       <form v-show="filtersOpen" class="history-filters" @submit.prevent="applyRange">
         <label>Period (NZ)
@@ -123,7 +140,8 @@ import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useAnalyticsStore } from '../stores/analyticsStore'
 import SessionEditor from '../components/SessionEditor.vue'
-import { exportHistory, type PomodoroLog, type DateRange } from '../services/service'
+import ActivityGraph from '../components/ActivityGraph.vue'
+import { exportHistory, fetchActivityPomodoros, type PomodoroLog, type DateRange } from '../services/service'
 import { skillLabel } from '../services/skillLabels'
 import { reportPeriods, periodRange, validateReportRange, type ReportPeriod } from '../services/reportPeriods'
 import { downloadHistory } from '../services/historyDownload'
@@ -149,6 +167,10 @@ const selectedPeriod = ref<ReportPeriod>('all')
 const isExporting = ref(false)
 const exportError = ref('')
 const exportMessage = ref('')
+const activityOpen = ref(false)
+const activityLoading = ref(false)
+const activityError = ref('')
+const activityLogs = ref<PomodoroLog[]>([])
 const rangeBusy = computed(() => isRefreshing.value || historyLoading.value || editorOpen.value || isExporting.value)
 const hasActiveFilter = computed(() => Boolean(appliedRange.value.start || appliedRange.value.end))
 const analyticsMatchesRange = computed(() => analyticsStore.hasLoaded &&
@@ -210,6 +232,20 @@ function choosePeriod() {
   startDate.value = range.start ?? ''
   endDate.value = range.end ?? ''
   return applyRange()
+}
+
+async function openActivityGraph() {
+  if (rangeBusy.value || activityLoading.value) return
+  activityOpen.value = true
+  activityLoading.value = true
+  activityError.value = ''
+  try {
+    activityLogs.value = await fetchActivityPomodoros(appliedRange.value)
+  } catch (cause) {
+    activityError.value = cause instanceof Error ? cause.message : 'Could not load activity graph.'
+  } finally {
+    activityLoading.value = false
+  }
 }
 
 async function exportSessions() {
@@ -509,6 +545,52 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
 
 .analytics-table tbody tr:hover {
   background: color-mix(in srgb, var(--theme-color), var(--surface) 88%);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.activity-modal {
+  width: min(980px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 1.25rem;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+
+.modal-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.modal-header h2,
+.modal-header p {
+  margin: 0;
+}
+
+.modal-header p {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.modal-header button {
+  min-width: 2.25rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 1.4rem;
+  line-height: 1;
 }
 
 @media (max-width: 600px) {

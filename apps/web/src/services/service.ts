@@ -270,6 +270,11 @@ export async function fetchPomodoros(options: HistoryOptions = {}): Promise<Sess
   return page;
 }
 
+export async function fetchActivityPomodoros(range: DateRange = {}, limit = 5000): Promise<PomodoroLog[]> {
+  const page = await fetchPomodoros({ ...range, limit })
+  return page.items
+}
+
 function isSessionPage(value: unknown): value is SessionPage {
   if (typeof value !== 'object' || value === null) return false;
   const page = value as Partial<SessionPage>;
