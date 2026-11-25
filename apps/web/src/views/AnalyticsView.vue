@@ -509,7 +509,7 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
 
 .skill-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr);
   align-items: baseline;
   gap: 1.25rem;
   overflow-wrap: anywhere;
