@@ -1,7 +1,7 @@
 <template>
   <section class="activity-graph" aria-label="Activity graph">
     <div class="activity-summary">
-      <strong>{{ totalMinutes }}</strong> minutes across <strong>{{ activeDays }}</strong> active days
+      <strong>{{ totalMinutes }}</strong> minutes and <strong>{{ totalTasks }}</strong> tasks across <strong>{{ activeDays }}</strong> active days
     </div>
 
     <div class="graph-scroll" role="img" :aria-label="`${totalMinutes} minutes tracked in the last ${days} days`">
@@ -23,15 +23,6 @@
       </div>
     </div>
 
-    <div class="activity-legend" aria-hidden="true">
-      <span>Less</span>
-      <span class="legend-cell level-0"></span>
-      <span class="legend-cell level-1"></span>
-      <span class="legend-cell level-2"></span>
-      <span class="legend-cell level-3"></span>
-      <span class="legend-cell level-4"></span>
-      <span>More</span>
-    </div>
   </section>
 </template>
 
@@ -144,6 +135,7 @@ const monthLabels = computed(() => {
   return labels
 })
 
+const totalTasks = computed(() => daysList.value.reduce((sum, day) => sum + day.taskCount, 0))
 const totalMinutes = computed(() => daysList.value.reduce((sum, day) => sum + day.minutes, 0))
 const activeDays = computed(() => daysList.value.filter(day => day.minutes > 0).length)
 </script>
@@ -157,7 +149,7 @@ const activeDays = computed(() => daysList.value.filter(day => day.minutes > 0).
 
 .activity-summary {
   color: var(--text-strong);
-  text-align: left;
+  text-align: center;
 }
 
 .graph-scroll {
