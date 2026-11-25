@@ -16,8 +16,8 @@
             v-if="day.date"
             class="graph-cell"
             :class="`level-${day.level}`"
-            :title="`${day.label}: ${day.minutes} min`"
-            :aria-label="`${day.label}: ${day.minutes} minutes`"
+            :title="`${day.label}: ${day.minutes} minutes, ${day.taskCount} ${day.taskCount === 1 ? 'task' : 'tasks'}`"
+            :aria-label="`${day.label}: ${day.minutes} minutes, ${day.taskCount} ${day.taskCount === 1 ? 'task' : 'tasks'}`"
           />
         </span>
       </div>
@@ -76,12 +76,21 @@ function addDays(date: Date, amount: number) {
   return next
 }
 
-const minutesByDay = computed(() => {
-  const map = new Map<string, number>()
+const activityByDay = computed(() => {
+  const map = new Map<string, { minutes: number; taskIds: Set<number> }>()
+
   for (const log of props.logs) {
     const key = dateKey(new Date(log.completedAt))
-    map.set(key, (map.get(key) ?? 0) + (log.duration ?? 0))
+    const activity = map.get(key) ?? { minutes: 0, taskIds: new Set<number>() }
+
+    activity.minutes += log.duration ?? 0
+    if (typeof log.taskId === 'number') {
+      activity.taskIds.add(log.taskId)
+    }
+
+    map.set(key, activity)
   }
+
   return map
 })
 
@@ -91,11 +100,14 @@ const daysList = computed(() => {
   return Array.from({ length: props.days }, (_, index) => {
     const date = addDays(start, index)
     const key = dateKey(date)
-    const minutes = minutesByDay.value.get(key) ?? 0
+    const activity = activityByDay.value.get(key)
+    const minutes = activity?.minutes ?? 0
+    const taskCount = activity?.taskIds.size ?? 0
     return {
       key,
       date,
       minutes,
+      taskCount,
       label: labelFormatter.format(date),
       month: monthFormatter.format(date),
       level: minutes === 0 ? 0 : minutes < 25 ? 1 : minutes < 60 ? 2 : minutes < 120 ? 3 : 4,
