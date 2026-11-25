@@ -192,8 +192,8 @@ describe('session history and analytics refresh', () => {
     expect(fetchPomodoros).toHaveBeenLastCalledWith({ limit: 25, cursor: 'older-cursor' })
     expect(wrapper.find('tbody').text()).toContain('Older session')
     expect(wrapper.findAll('button').find(button => button.text() === 'Newer sessions')!.attributes('disabled')).toBeUndefined()
-    expect(wrapper.find('.skill-metrics').text()).toContain('235 min')
-    expect(wrapper.find('.skill-periods').text()).toContain('140')
+    expect(wrapper.find('.skill-stats').text()).toContain('235 sessions')
+    expect(wrapper.find('.skill-stats').text()).toContain('140 mins')
     expect(wrapper.findAll('button').find(button => button.text() === 'Older sessions')!.attributes('disabled')).toBeDefined()
     vi.mocked(fetchPomodoros).mockResolvedValueOnce({
       items: [manual], hasMore: true, nextCursor: 'older-cursor', limit: 25,
@@ -230,14 +230,14 @@ describe('session history and analytics refresh', () => {
   it('applies inclusive date filters to history and aggregates and resets navigation', async () => {
     const wrapper = await analytics()
     await wrapper.get('[name="start"]').setValue('2026-01-01')
+    await flushPromises()
     await wrapper.get('[name="end"]').setValue('2026-01-31')
-    await wrapper.get('.history-filters').trigger('submit')
     await flushPromises()
     expect(fetchPomodoros).toHaveBeenLastCalledWith({
       start: '2026-01-01', end: '2026-01-31', limit: 25, cursor: undefined,
     })
     expect(fetchAnalytics).toHaveBeenLastCalledWith({ start: '2026-01-01', end: '2026-01-31' })
-    await wrapper.findAll('button').find(button => button.text() === 'All dates')!.trigger('click')
+    await wrapper.get('[name="period"]').setValue('all')
     await flushPromises()
     expect(fetchPomodoros).toHaveBeenLastCalledWith({ start: undefined, end: undefined, limit: 25, cursor: undefined })
   })
@@ -245,9 +245,10 @@ describe('session history and analytics refresh', () => {
   it('rejects reversed dates without requesting another page', async () => {
     const wrapper = await analytics()
     await wrapper.get('[name="start"]').setValue('2026-02-01')
+    await flushPromises()
     await wrapper.get('[name="end"]').setValue('2026-01-01')
-    await wrapper.get('.history-filters').trigger('submit')
     expect(wrapper.get('[role="alert"]').text()).toContain('Start date')
-    expect(fetchPomodoros).toHaveBeenCalledTimes(1)
+    // One page for the initial load and one for the auto-applied start date; none for the invalid range.
+    expect(fetchPomodoros).toHaveBeenCalledTimes(2)
   })
 })

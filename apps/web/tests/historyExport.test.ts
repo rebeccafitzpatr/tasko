@@ -36,15 +36,14 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 describe('CSV history export UI', () => {
-  it('exports the applied range across older pages, not draft dates or cursors', async () => {
+  it('exports the auto-applied range across older pages, not pagination cursors', async () => {
     const wrapper = await render()
     await wrapper.get('[name="start"]').setValue('2026-01-01')
+    await flushPromises()
     await wrapper.get('[name="end"]').setValue('2026-01-31')
-    await wrapper.get('.history-filters').trigger('submit')
     await flushPromises()
     await wrapper.findAll('button').find(button => button.text() === 'Older sessions')!.trigger('click')
     await flushPromises()
-    await wrapper.get('[name="start"]').setValue('2025-01-01')
     const csv = new Blob(['all 145 records'], { type: 'text/csv' })
     vi.mocked(exportHistory).mockResolvedValueOnce(csv)
     await exportButton(wrapper).trigger('click')
@@ -52,7 +51,8 @@ describe('CSV history export UI', () => {
     expect(exportHistory).toHaveBeenCalledWith({ start: '2026-01-01', end: '2026-01-31' })
     expect(downloadHistory).toHaveBeenCalledWith(csv, { start: '2026-01-01', end: '2026-01-31' })
     expect(wrapper.text()).toContain('CSV download started for all matching sessions')
-    expect(fetchPomodoros).toHaveBeenCalledTimes(3)
+    // Initial page, one auto-apply per committed date, one older page; exporting adds none.
+    expect(fetchPomodoros).toHaveBeenCalledTimes(4)
   })
   it('shows progress, prevents double exports and explains empty results', async () => {
     const wrapper = await render()

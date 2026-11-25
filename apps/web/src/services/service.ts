@@ -49,6 +49,12 @@ export type AnalyticsSummary = {
     directMinutes?: number
     pomodoros?: number
     minutes?: number
+    todayTasks?: number
+    weekTasks?: number
+    yearTasks?: number
+    todayPomodoros?: number
+    weekPomodoros?: number
+    yearPomodoros?: number
     todayMinutes?: number
     weekMinutes?: number
     yearMinutes?: number
@@ -262,6 +268,21 @@ export async function fetchPomodoros(options: HistoryOptions = {}): Promise<Sess
     throw new Error('Session history response is in an outdated format. Restart or redeploy the backend with the latest code and migrations.');
   }
   return page;
+}
+
+export async function fetchActivityPomodoros(): Promise<PomodoroLog[]> {
+  const sessions: PomodoroLog[] = []
+  let cursor: string | undefined
+
+  while (true) {
+    const page = await fetchPomodoros({ limit: 100, cursor })
+    sessions.push(...page.items)
+
+    if (!page.hasMore || !page.nextCursor) break
+    cursor = page.nextCursor
+  }
+
+  return sessions
 }
 
 function isSessionPage(value: unknown): value is SessionPage {

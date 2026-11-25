@@ -1,88 +1,88 @@
-
 <template>
   <div class="analytics-root">
     <h1>Analytics</h1>
     <p v-if="loadError" role="alert">{{ loadError }}</p>
     <button v-if="loadError" :disabled="isRefreshing" @click="loadData(true)">Retry loading</button>
     <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
-    <form class="history-filters" @submit.prevent="applyRange">
-      <label>Period (NZ)
-        <select v-model="selectedPeriod" name="period" :disabled="rangeBusy" @change="choosePeriod">
-          <option v-for="period in reportPeriods" :key="period.value" :value="period.value">{{ period.label }}</option>
-        </select>
-      </label>
-      <label>Start date (NZ)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
-      <label>End date (NZ)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" /></label>
-      <button :disabled="rangeBusy">Apply dates</button>
-      <button type="button" :disabled="rangeBusy" @click="clearRange">All dates</button>
-    </form>
-    <p v-if="rangeError" role="alert">{{ rangeError }}</p>
-    <label class="compare-toggle"><input v-model="compareEnabled" name="compare" type="checkbox" :disabled="rangeBusy" @change="loadComparison" />
-      Compare with the prior equal-length period</label>
-    <section v-if="compareEnabled" class="comparison card" aria-label="Prior period comparison">
-      <p v-if="comparisonLoading" role="status">Loading prior period...</p>
-      <p v-if="comparisonError" role="alert">{{ comparisonError }}</p>
-      <button v-if="comparisonError" :disabled="comparisonLoading" @click="loadComparison">Retry comparison</button>
-      <p v-if="comparisonUnavailable">{{ comparisonUnavailable }}</p>
-      <template v-if="priorSummary && analyticsMatchesRange && !comparisonLoading">
-        <h2>Prior period: {{ priorRange?.start }} to {{ priorRange?.end }}</h2>
-        <p v-if="priorSummary.totalPomodoros === 0">No sessions in the prior period.</p>
-        <div class="comparison-totals">
-          <p>Prior time: {{ priorSummary.totalMinutes ?? 0 }} min.
-            Change: {{ comparisonChange(analyticsStore.summary.totalMinutes ?? 0, priorSummary.totalMinutes ?? 0, 'min') }}</p>
-          <p>Prior sessions: {{ priorSummary.totalPomodoros }}.
-            Change: {{ comparisonChange(analyticsStore.summary.totalPomodoros, priorSummary.totalPomodoros, 'sessions') }}</p>
-        </div>
-      </template>
-    </section>
     <p v-if="isRefreshing" role="status">Loading analytics...</p>
-    <div v-if="analyticsMatchesRange" class="analytics-summary card">
-      <div class="summary-item">
-        <span class="summary-label">Total tasks</span>
-        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
-        <span v-else class="summary-value">{{ analyticsStore.summary.totalTasks }}</span>
+    <div v-if="analyticsMatchesRange" class="card skill-section">
+      <div class="skill-section-header">
+        <h2>Time spent per skill</h2>
+        <div class="skill-period-toggle" role="group" aria-label="Minutes period">
+          <button type="button" :class="{ active: skillPeriod === 'today' }" @click="skillPeriod = 'today'">today</button>
+          <span aria-hidden="true">/</span>
+          <button type="button" :class="{ active: skillPeriod === 'week' }" @click="skillPeriod = 'week'">this week</button>
+          <span aria-hidden="true">/</span>
+          <button type="button" :class="{ active: skillPeriod === 'year' }" @click="skillPeriod = 'year'">this year</button>
+        </div>
       </div>
-      <div class="summary-item">
-        <span class="summary-label">Total sessions</span>
-        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
-        <span v-else class="summary-value">{{ analyticsStore.summary.totalPomodoros }}</span>
-      </div>
-      <div class="summary-item">
-        <span class="summary-label">Total time spent</span>
-        <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
-        <span v-else class="summary-value">{{ analyticsStore.summary.totalMinutes }} min</span>
-      </div>
-    </div>
-    <p v-if="analyticsMatchesRange && !isRefreshing && analyticsStore.summary.totalPomodoros === 0">No sessions in the selected range. Totals are zero.</p>
-    <div v-if="analyticsMatchesRange" class="card">
-      <h2>Time spent per skill</h2>
       <ul class="skill-list">
-        <li v-for="skill in skills" :key="skill.id" class="skill-card">
-          <div class="skill-title">{{ skillLabel(skill, skills) }}</div>
-          <div class="skill-metrics">
-            <span>{{ countTasksForSkill(skill.id) }} tasks</span>
-            <span>{{ totalPomodorosForSkill(skill.id) }} sessions</span>
-            <span>{{ totalMinutesForSkill(skill.id) }} min</span>
-          </div>
-          <div class="skill-periods">
-            <span>Today: <b>{{ skillSummary(skill.id)?.todayMinutes ?? 0 }}</b> min</span>
-            <span>This week: <b>{{ skillSummary(skill.id)?.weekMinutes ?? 0 }}</b> min</span>
-            <span>This year: <b>{{ skillSummary(skill.id)?.yearMinutes ?? 0 }}</b> min</span>
-          </div>
-          <p v-if="compareEnabled && priorSummary && !comparisonLoading" class="skill-comparison">
-            Prior: {{ priorSkillSummary(skill.id)?.minutes ?? 0 }} min / {{ priorSkillSummary(skill.id)?.pomodoros ?? 0 }} sessions.
-            Time change: {{ comparisonChange(totalMinutesForSkill(skill.id), priorSkillSummary(skill.id)?.minutes ?? 0, 'min') }}.
-            Session change: {{ comparisonChange(totalPomodorosForSkill(skill.id), priorSkillSummary(skill.id)?.pomodoros ?? 0, 'sessions') }}
-          </p>
+        <li v-for="skill in skills" :key="skill.id" class="skill-row">
+          <span class="skill-name">{{ skillLabel(skill, skills) }}</span>
+          <span class="skill-stats">
+            <span>{{ periodTasksForSkill(skill.id) }} {{ periodTasksForSkill(skill.id) === 1 ? 'task' : 'tasks' }}</span>
+            <span>{{ periodPomodorosForSkill(skill.id) }} sessions</span>
+            <span>{{ periodMinutesForSkill(skill.id) }} mins</span>
+          </span>
         </li>
       </ul>
     </div>
     <div class="card">
-      <h2>Session history</h2>
-      <div class="history-actions">
-        <button :disabled="rangeBusy" @click="openEditor(null)">Add manual session</button>
-        <button :disabled="rangeBusy" @click="exportSessions">{{ isExporting ? 'Exporting...' : 'Export CSV' }}</button>
+      <h2 class="history-heading">Session History</h2>
+      <div v-if="analyticsMatchesRange" class="analytics-summary">
+        <div class="summary-item">
+          <span class="summary-label">Total tasks</span>
+          <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+          <span v-else class="summary-value">{{ analyticsStore.summary.totalTasks }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Total sessions</span>
+          <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+          <span v-else class="summary-value">{{ analyticsStore.summary.totalPomodoros }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Total time spent</span>
+          <span v-if="analyticsStore.isLoading && !analyticsStore.hasLoaded" class="summary-value">...</span>
+          <span v-else class="summary-value">{{ analyticsStore.summary.totalMinutes }} min</span>
+        </div>
       </div>
+      <p v-if="analyticsMatchesRange && !isRefreshing && analyticsStore.summary.totalPomodoros === 0">No sessions in the selected range. Totals are zero.</p>
+      <div class="history-actions">
+        <div class="history-action-group">
+          <button :disabled="rangeBusy" @click="openEditor(null)">Add manual session</button>
+          <button :disabled="rangeBusy" @click="exportSessions">{{ isExporting ? 'Exporting...' : 'Export CSV' }}</button>
+          <button :disabled="rangeBusy || activityLoading" @click="openActivityGraph">
+            {{ activityLoading ? 'Loading graph...' : 'Activity graph' }}
+          </button>
+        </div>
+        <button class="filter-toggle" type="button" :aria-expanded="filtersOpen" @click="filtersOpen = !filtersOpen">
+          {{ filtersOpen ? 'Hide filter' : hasActiveFilter ? 'Filter ●' : 'Filter' }}
+        </button>
+      </div>
+      <div v-if="activityOpen" class="modal-backdrop" role="presentation" @click.self="activityOpen = false">
+        <section class="activity-modal" role="dialog" aria-modal="true" aria-labelledby="activity-title">
+          <div class="modal-header">
+            <div>
+              <h2 id="activity-title">Activity graph</h2>
+              <p>Daily study minutes for the last year.</p>
+            </div>
+            <button type="button" aria-label="Close activity graph" @click="activityOpen = false">×</button>
+          </div>
+          <p v-if="activityError" role="alert">{{ activityError }}</p>
+          <p v-else-if="activityLoading" role="status">Loading activity...</p>
+          <ActivityGraph :logs="activityLogs" :tasks="taskStore.tasks" />
+        </section>
+      </div>
+      <form v-show="filtersOpen" class="history-filters" @submit.prevent="applyRange">
+        <label>Period (NZ)
+          <select v-model="selectedPeriod" name="period" :disabled="rangeBusy" @change="choosePeriod">
+            <option v-for="period in reportPeriods" :key="period.value" :value="period.value">{{ period.label }}</option>
+          </select>
+        </label>
+        <label>Start date (NZ)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" @change="applyCustomDates" /></label>
+        <label>End date (NZ)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" @change="applyCustomDates" /></label>
+      </form>
+      <p v-if="rangeError" role="alert">{{ rangeError }}</p>
       <p v-if="isExporting" role="status">Exporting all matching sessions...</p>
       <p v-if="exportMessage" role="status">{{ exportMessage }}</p>
       <p v-if="exportError" role="alert">{{ exportError }} Retry with Export CSV.</p>
@@ -134,15 +134,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch, onBeforeUnmount } from 'vue'
 import { useTaskStore } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useAnalyticsStore } from '../stores/analyticsStore'
 import SessionEditor from '../components/SessionEditor.vue'
-import { exportHistory, fetchAnalytics, type AnalyticsSummary, type PomodoroLog, type DateRange } from '../services/service'
+import ActivityGraph from '../components/ActivityGraph.vue'
+import { exportHistory, fetchActivityPomodoros, type PomodoroLog, type DateRange } from '../services/service'
 import { skillLabel } from '../services/skillLabels'
-import { reportPeriods, periodRange, previousRange, validateReportRange, comparisonChange, type ReportPeriod } from '../services/reportPeriods'
+import { reportPeriods, periodRange, validateReportRange, type ReportPeriod } from '../services/reportPeriods'
 import { downloadHistory } from '../services/historyDownload'
 import { formatNzDateTime } from '../services/timeZone'
 
@@ -158,6 +159,7 @@ const isRefreshing = ref(false)
 const historyLoading = ref(false)
 const historyError = ref('')
 const rangeError = ref('')
+const filtersOpen = ref(false)
 const startDate = ref('')
 const endDate = ref('')
 const appliedRange = ref<DateRange>({})
@@ -165,20 +167,38 @@ const selectedPeriod = ref<ReportPeriod>('all')
 const isExporting = ref(false)
 const exportError = ref('')
 const exportMessage = ref('')
+const activityOpen = ref(false)
+const activityLoading = ref(false)
+const activityError = ref('')
+const activityLogs = ref<PomodoroLog[]>([])
 const rangeBusy = computed(() => isRefreshing.value || historyLoading.value || editorOpen.value || isExporting.value)
-const compareEnabled = ref(false)
-const comparisonLoading = ref(false)
-const comparisonError = ref('')
-const comparisonUnavailable = ref('')
-const priorSummary = ref<AnalyticsSummary | null>(null)
-const priorRange = ref<DateRange | null>(null)
-let comparisonRequestId = 0
+const hasActiveFilter = computed(() => Boolean(appliedRange.value.start || appliedRange.value.end))
 const analyticsMatchesRange = computed(() => analyticsStore.hasLoaded &&
   analyticsStore.cacheKey === JSON.stringify([appliedRange.value.start ?? null, appliedRange.value.end ?? null]))
 const currentCursor = ref<string | null>(null)
 const previousCursors = ref<(string | null)[]>([])
 type PageAction = 'first' | 'next' | 'previous'
 let retryPage: { cursor: string | null; action: PageAction } = { cursor: null, action: 'first' }
+
+let previousBodyOverflow = ''
+let previousHtmlOverflow = ''
+
+watch(activityOpen, (isOpen) => {
+  if (isOpen) {
+    previousBodyOverflow = document.body.style.overflow
+    previousHtmlOverflow = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = previousBodyOverflow
+    document.documentElement.style.overflow = previousHtmlOverflow
+  }
+})
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = previousBodyOverflow
+  document.documentElement.style.overflow = previousHtmlOverflow
+})
 
 async function loadHistory(cursor: string | null, action: PageAction) {
   if (historyLoading.value) return
@@ -221,10 +241,8 @@ async function applyRange() {
   await loadData(true)
 }
 
-function clearRange() {
-  selectedPeriod.value = 'all'
-  startDate.value = ''
-  endDate.value = ''
+function applyCustomDates() {
+  selectedPeriod.value = 'custom'
   return applyRange()
 }
 
@@ -234,6 +252,20 @@ function choosePeriod() {
   startDate.value = range.start ?? ''
   endDate.value = range.end ?? ''
   return applyRange()
+}
+
+async function openActivityGraph() {
+  if (rangeBusy.value || activityLoading.value) return
+  activityOpen.value = true
+  activityLoading.value = true
+  activityError.value = ''
+  try {
+    activityLogs.value = await fetchActivityPomodoros()
+  } catch (cause) {
+    activityError.value = cause instanceof Error ? cause.message : 'Could not load activity graph.'
+  } finally {
+    activityLoading.value = false
+  }
 }
 
 async function exportSessions() {
@@ -257,37 +289,6 @@ async function exportSessions() {
   }
 }
 
-function priorSkillSummary(id: number) {
-  return priorSummary.value?.breakdown?.find(skill => skill.skillId === id)
-}
-
-async function loadComparison() {
-  const requestId = ++comparisonRequestId
-  priorSummary.value = null
-  priorRange.value = null
-  comparisonError.value = ''
-  comparisonUnavailable.value = ''
-  comparisonLoading.value = false
-  if (!compareEnabled.value) return
-  const { start, end } = appliedRange.value
-  if (!start || !end) {
-    comparisonUnavailable.value = 'Choose both a start and end date to compare equal-length periods. All dates has no prior equivalent.'
-    return
-  }
-  comparisonLoading.value = true
-  try {
-    const range = previousRange({ start, end })
-    priorRange.value = range
-    const summary = await fetchAnalytics(range)
-    if (requestId === comparisonRequestId) priorSummary.value = summary
-  } catch (cause) {
-    if (requestId === comparisonRequestId) comparisonError.value =
-      cause instanceof Error ? cause.message : 'Could not load the prior period. Retry comparison.'
-  } finally {
-    if (requestId === comparisonRequestId) comparisonLoading.value = false
-  }
-}
-
 async function loadData(force = false) {
   if (isRefreshing.value || historyLoading.value) return
   isRefreshing.value = true
@@ -298,7 +299,6 @@ async function loadData(force = false) {
       taskStore.loadTasks(),
       skillStore.loadSkills(),
       loadHistory(null, 'first'),
-      loadComparison(),
     ])
     const failed = results.find(result => result.status === 'rejected')
     if (failed?.status === 'rejected') throw failed.reason
@@ -335,16 +335,27 @@ async function sessionSaved() {
 const tasks = computed(() => taskStore.tasks)
 const skills = computed(() => skillStore.skills)
 
-function countTasksForSkill(skillId: number) {
-  return tasks.value.filter(t => t.skillId === skillId).length
+const skillPeriod = ref<'today' | 'week' | 'year'>('today')
+
+function periodTasksForSkill(skillId: number) {
+  const summary = skillSummary(skillId)
+  if (skillPeriod.value === 'today') return summary?.todayTasks ?? 0
+  if (skillPeriod.value === 'week') return summary?.weekTasks ?? 0
+  return summary?.yearTasks ?? 0
 }
 
-function totalPomodorosForSkill(skillId: number) {
-  return skillSummary(skillId)?.pomodoros ?? 0
+function periodPomodorosForSkill(skillId: number) {
+  const summary = skillSummary(skillId)
+  if (skillPeriod.value === 'today') return summary?.todayPomodoros ?? 0
+  if (skillPeriod.value === 'week') return summary?.weekPomodoros ?? 0
+  return summary?.yearPomodoros ?? 0
 }
 
-function totalMinutesForSkill(skillId: number) {
-  return skillSummary(skillId)?.minutes ?? 0
+function periodMinutesForSkill(skillId: number) {
+  const summary = skillSummary(skillId)
+  if (skillPeriod.value === 'today') return summary?.todayMinutes ?? 0
+  if (skillPeriod.value === 'week') return summary?.weekMinutes ?? 0
+  return summary?.yearMinutes ?? 0
 }
 
 function skillSummary(skillId: number) {
@@ -364,7 +375,6 @@ function formatDateTime(dt: string) {
 }
 
 const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
-// ...existing script code...
 </script>
 
 <style scoped>
@@ -378,10 +388,9 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
 .history-filters label { display: flex; flex-direction: column; gap: 0.4rem; text-align: left; }
 .history-filters label { flex: 1 1 160px; min-width: 0; }
 .history-filters input, .history-filters select { width: 100%; min-width: 0; box-sizing: border-box; }
-.compare-toggle { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
-.comparison { overflow-wrap: anywhere; }
-.comparison-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 1rem; }
-.skill-comparison { font-size: 0.9rem; }
+.history-actions { justify-content: space-between; }
+.history-action-group { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.history-actions .filter-toggle { margin-left: auto; }
 .analytics-root {
   width: 100%;
   min-width: 0;
@@ -407,7 +416,10 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
   border-top: 4px solid var(--theme-color);
+  border-radius: 8px;
   background: color-mix(in srgb, var(--theme-color), var(--surface) 92%);
 }
 
@@ -431,67 +443,91 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
   font-weight: bold;
 }
 
-.skill-list {
+.history-heading {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.skill-section {
+  padding: 1.25rem 1rem;
+  background: color-mix(in srgb, var(--theme-color), var(--surface) 94%);
+}
+
+.skill-section-header {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.skill-section-header h2 {
+  margin: 0;
+}
+
+.skill-period-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.skill-period-toggle button {
+  min-height: 0;
+  padding: 0;
+  color: var(--text);
+  font-size: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.skill-period-toggle button:hover:not(:disabled) {
+  color: var(--theme-text);
+  background: none;
+  border: none;
+}
+
+.skill-period-toggle button.active {
+  color: var(--text-strong);
+  font-weight: 700;
+}
+
+.skill-list {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   min-width: 0;
-  gap: 0.75rem;
+  gap: 0.9rem;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-.skill-card {
-  min-width: 0;
-  flex: 1 1 180px;
-  padding: 1rem;
-  background: var(--surface-muted);
-  border-radius: 8px;
+.skill-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr);
+  align-items: baseline;
+  gap: 1.25rem;
   overflow-wrap: anywhere;
 }
 
-.skill-title {
-  margin-bottom: 0.5rem;
-  font-weight: bold;
-}
-
-.skill-metrics,
-.skill-periods {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-}
-
-.skill-metrics {
-  margin-bottom: 0.5rem;
-  padding: 0px 6px;
+.skill-name {
   color: var(--text-strong);
-  font-size: 0.7rem;
-  justify-content:space-between;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: right;
 }
 
-.skill-periods {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  width: 100%;
-  color: var(--text);
+.skill-stats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  color: var(--text-strong);
   font-size: 0.9rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.skill-periods span {
-  min-width: 0;
-  padding: 0.6rem 0.45rem;
-  text-align: center;
-  border-right: 1px solid var(--border);
-}
-
-.skill-periods span:last-child {
-  border-right: 0;
 }
 
 .analytics-table {
@@ -529,6 +565,54 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
 
 .analytics-table tbody tr:hover {
   background: color-mix(in srgb, var(--theme-color), var(--surface) 88%);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.activity-modal {
+  width: min(980px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 1.25rem;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+
+.modal-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.modal-header h2,
+.modal-header p {
+  margin: 0;
+}
+
+.modal-header p {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.modal-header button {
+  min-width: 2.25rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 1.4rem;
+  line-height: 1;
 }
 
 @media (max-width: 600px) {

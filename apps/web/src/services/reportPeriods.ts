@@ -41,26 +41,3 @@ export function periodRange(period: Exclude<ReportPeriod, 'custom'>, now = new D
   if (period === 'year') start.setUTCMonth(0, 1)
   return { start: start.toISOString().slice(0, 10), end }
 }
-
-export function previousRange(range: Required<DateRange>): Required<DateRange> {
-  validateReportRange(range)
-  const start = calendarDate(range.start)
-  const end = calendarDate(range.end)
-  const days = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1
-  end.setTime(start.getTime())
-  end.setUTCDate(end.getUTCDate() - 1)
-  start.setUTCDate(start.getUTCDate() - days)
-  const previous = { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
-  validateReportRange(previous)
-  return previous
-}
-
-export function comparisonChange(current: number, previous: number, unit: string): string {
-  const delta = current - previous
-  const change = `${delta > 0 ? '+' : ''}${delta} ${unit}`
-  if (previous === 0) return current === 0
-    ? 'No activity in either period.'
-    : `${change}; no prior activity (percentage unavailable).`
-  const percent = Math.round(delta / previous * 100)
-  return `${change} (${percent > 0 ? '+' : ''}${percent}%)`
-}
