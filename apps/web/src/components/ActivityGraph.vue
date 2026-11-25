@@ -267,7 +267,7 @@ const activeDays = computed(() => daysList.value.filter(day => day.minutes > 0).
 .legend-cell {
   display: block;
   width: 13px;
-  height: 13px;
+  min-height: 13px;
   border-radius: 3px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
