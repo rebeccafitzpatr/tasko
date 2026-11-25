@@ -49,6 +49,12 @@ export type AnalyticsSummary = {
     directMinutes?: number
     pomodoros?: number
     minutes?: number
+    todayTasks?: number
+    weekTasks?: number
+    yearTasks?: number
+    todayPomodoros?: number
+    weekPomodoros?: number
+    yearPomodoros?: number
     todayMinutes?: number
     weekMinutes?: number
     yearMinutes?: number

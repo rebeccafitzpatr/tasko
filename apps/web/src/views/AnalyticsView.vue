@@ -1,4 +1,3 @@
-
 <template>
   <div class="analytics-root">
     <h1>Analytics</h1>
@@ -21,8 +20,8 @@
         <li v-for="skill in skills" :key="skill.id" class="skill-row">
           <span class="skill-name">{{ skillLabel(skill, skills) }}</span>
           <span class="skill-stats">
-            <span>{{ countTasksForSkill(skill.id) }} {{ countTasksForSkill(skill.id) === 1 ? 'task' : 'tasks' }}</span>
-            <span>{{ totalPomodorosForSkill(skill.id) }} sessions</span>
+            <span>{{ periodTasksForSkill(skill.id) }} {{ periodTasksForSkill(skill.id) === 1 ? 'task' : 'tasks' }}</span>
+            <span>{{ periodPomodorosForSkill(skill.id) }} sessions</span>
             <span>{{ periodMinutesForSkill(skill.id) }} mins</span>
           </span>
         </li>
@@ -280,15 +279,21 @@ async function sessionSaved() {
 const tasks = computed(() => taskStore.tasks)
 const skills = computed(() => skillStore.skills)
 
-function countTasksForSkill(skillId: number) {
-  return tasks.value.filter(t => t.skillId === skillId).length
-}
-
-function totalPomodorosForSkill(skillId: number) {
-  return skillSummary(skillId)?.pomodoros ?? 0
-}
-
 const skillPeriod = ref<'today' | 'week' | 'year'>('today')
+
+function periodTasksForSkill(skillId: number) {
+  const summary = skillSummary(skillId)
+  if (skillPeriod.value === 'today') return summary?.todayTasks ?? 0
+  if (skillPeriod.value === 'week') return summary?.weekTasks ?? 0
+  return summary?.yearTasks ?? 0
+}
+
+function periodPomodorosForSkill(skillId: number) {
+  const summary = skillSummary(skillId)
+  if (skillPeriod.value === 'today') return summary?.todayPomodoros ?? 0
+  if (skillPeriod.value === 'week') return summary?.weekPomodoros ?? 0
+  return summary?.yearPomodoros ?? 0
+}
 
 function periodMinutesForSkill(skillId: number) {
   const summary = skillSummary(skillId)
@@ -314,7 +319,6 @@ function formatDateTime(dt: string) {
 }
 
 const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
-// ...existing script code...
 </script>
 
 <style scoped>

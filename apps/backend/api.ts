@@ -522,6 +522,8 @@ router.get('/analytics/summary', async (req, res) => {
       skillId: number; skillName: string; pomodoros: number; minutes: number;
       parentId: number | null; parentName: string | null; skillPath: string;
       directPomodoros: number; directMinutes: number;
+      todayTasks: number; weekTasks: number; yearTasks: number;
+      todayPomodoros: number; weekPomodoros: number; yearPomodoros: number;
       todayMinutes: number; weekMinutes: number; yearMinutes: number
     }[] = await db`
       SELECT s.id AS skillId, s.name AS skillName,
@@ -531,6 +533,18 @@ router.get('/analytics/summary', async (req, res) => {
              COALESCE(SUM(pl.duration_minutes), 0) AS minutes,
              COALESCE(SUM(CASE WHEN pl.skill_id = s.id THEN 1 ELSE 0 END), 0) AS directPomodoros,
              COALESCE(SUM(CASE WHEN pl.skill_id = s.id THEN pl.duration_minutes ELSE 0 END), 0) AS directMinutes,
+             COUNT(DISTINCT CASE WHEN pl.completed_at >= ${todayStart} AND pl.completed_at <= ${nowTime}
+               THEN pl.task_id ELSE NULL END) AS todayTasks,
+             COUNT(DISTINCT CASE WHEN pl.completed_at >= ${weekStart} AND pl.completed_at <= ${nowTime}
+               THEN pl.task_id ELSE NULL END) AS weekTasks,
+             COUNT(DISTINCT CASE WHEN pl.completed_at >= ${yearStart} AND pl.completed_at <= ${nowTime}
+               THEN pl.task_id ELSE NULL END) AS yearTasks,
+             COALESCE(SUM(CASE WHEN pl.completed_at >= ${todayStart} AND pl.completed_at <= ${nowTime}
+               THEN 1 ELSE 0 END), 0) AS todayPomodoros,
+             COALESCE(SUM(CASE WHEN pl.completed_at >= ${weekStart} AND pl.completed_at <= ${nowTime}
+               THEN 1 ELSE 0 END), 0) AS weekPomodoros,
+             COALESCE(SUM(CASE WHEN pl.completed_at >= ${yearStart} AND pl.completed_at <= ${nowTime}
+               THEN 1 ELSE 0 END), 0) AS yearPomodoros,
              COALESCE(SUM(CASE WHEN pl.completed_at >= ${todayStart} AND pl.completed_at <= ${nowTime}
                THEN pl.duration_minutes ELSE 0 END), 0) AS todayMinutes,
              COALESCE(SUM(CASE WHEN pl.completed_at >= ${weekStart} AND pl.completed_at <= ${nowTime}
@@ -558,6 +572,10 @@ router.get('/analytics/summary', async (req, res) => {
         skillPath: row.skillPath,
         pomodoros: Number(row.pomodoros), minutes: Number(row.minutes),
         directPomodoros: Number(row.directPomodoros), directMinutes: Number(row.directMinutes),
+        todayTasks: Number(row.todayTasks), weekTasks: Number(row.weekTasks),
+        yearTasks: Number(row.yearTasks),
+        todayPomodoros: Number(row.todayPomodoros), weekPomodoros: Number(row.weekPomodoros),
+        yearPomodoros: Number(row.yearPomodoros),
         todayMinutes: Number(row.todayMinutes), weekMinutes: Number(row.weekMinutes),
         yearMinutes: Number(row.yearMinutes),
       }))
