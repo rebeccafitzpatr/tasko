@@ -70,7 +70,7 @@
           </div>
           <p v-if="activityError" role="alert">{{ activityError }}</p>
           <p v-else-if="activityLoading" role="status">Loading activity...</p>
-          <ActivityGraph v-else :logs="activityLogs" />
+          <ActivityGraph :logs="activityLogs" :tasks="taskStore.tasks" />
         </section>
       </div>
       <form v-show="filtersOpen" class="history-filters" @submit.prevent="applyRange">
@@ -240,7 +240,7 @@ async function openActivityGraph() {
   activityLoading.value = true
   activityError.value = ''
   try {
-    activityLogs.value = await fetchActivityPomodoros({})
+    activityLogs.value = await fetchActivityPomodoros()
   } catch (cause) {
     activityError.value = cause instanceof Error ? cause.message : 'Could not load activity graph.'
   } finally {

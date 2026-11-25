@@ -6,36 +6,71 @@
 
     <div class="graph-scroll" role="img" :aria-label="`${totalMinutes} minutes tracked in the last ${days} days`">
       <div class="month-row" :style="gridStyle">
-        <span v-for="label in monthLabels" :key="label.key" class="month-label" :style="{ gridColumn: `${label.column} / span ${label.span}` }">
+        <span
+          v-for="label in monthLabels"
+          :key="label.key"
+          class="month-label"
+          :style="{ gridColumn: `${label.column} / span ${label.span}` }"
+        >
           {{ label.name }}
         </span>
       </div>
+
       <div class="graph-grid" :style="gridStyle">
         <span v-for="day in paddedDays" :key="day.key" class="graph-cell-wrapper">
-          <span
+          <button
             v-if="day.date"
+            type="button"
             class="graph-cell"
             :class="`level-${day.level}`"
             :title="`${day.label}: ${day.minutes} minutes, ${day.taskCount} ${day.taskCount === 1 ? 'task' : 'tasks'}`"
-            :aria-label="`${day.label}: ${day.minutes} minutes, ${day.taskCount} ${day.taskCount === 1 ? 'task' : 'tasks'}`"
+            :aria-label="`Show sessions for ${day.label}: ${day.minutes} minutes`"
+            :aria-pressed="selectedDayKey === day.key"
+            @click="selectedDayKey = selectedDayKey === day.key ? null : day.key"
           />
         </span>
       </div>
     </div>
 
+    <section v-if="selectedDay" class="day-details" aria-live="polite">
+      <h3>Sessions on {{ selectedDay.label }}</h3>
+
+      <p v-if="!selectedDaySessions.length">No sessions recorded on this day.</p>
+
+      <div
+        v-for="group in selectedDayTaskGroups"
+        :key="group.key"
+        class="task-session-group"
+      >
+        <strong>{{ group.name }} — {{ group.minutes }} minutes</strong>
+        <ul>
+          <li
+            v-for="(session, index) in group.sessions"
+            :key="`${session.completedAt}-${index}`"
+          >
+            {{ sessionTimeFormatter.format(new Date(session.completedAt)) }}
+            · {{ session.duration }} minutes
+          </li>
+        </ul>
+      </div>
+    </section>
+    
+
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { PomodoroLog } from '../services/service'
 import { APP_TIME_ZONE } from '../services/timeZone'
 
 const props = withDefaults(defineProps<{
   logs: PomodoroLog[]
   days?: number
+  tasks?: { id: number; name: string }[]
 }>(), {
   days: 365,
+  tasks: () => [],
 })
 
 const dayFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -135,6 +170,44 @@ const monthLabels = computed(() => {
   return labels
 })
 
+const selectedDayKey = ref<string | null>(null)
+
+const sessionTimeFormatter = new Intl.DateTimeFormat('en-NZ', {
+  timeZone: APP_TIME_ZONE,
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+const selectedDay = computed(() =>
+  daysList.value.find(day => day.key === selectedDayKey.value),
+)
+
+const selectedDaySessions = computed(() =>
+  selectedDayKey.value
+    ? props.logs.filter(log => dateKey(new Date(log.completedAt)) === selectedDayKey.value)
+    : [],
+)
+
+const selectedDayTaskGroups = computed(() => {
+  const groups = new Map<number | null, PomodoroLog[]>()
+
+  for (const session of selectedDaySessions.value) {
+    const taskId = typeof session.taskId === 'number' ? session.taskId : null
+    const sessions = groups.get(taskId) ?? []
+    sessions.push(session)
+    groups.set(taskId, sessions)
+  }
+
+  return [...groups.entries()].map(([taskId, sessions]) => ({
+    key: taskId === null ? 'unlinked' : String(taskId),
+    name: taskId === null
+      ? 'Unlinked sessions'
+      : props.tasks.find(task => task.id === taskId)?.name ?? `Task #${taskId}`,
+    sessions,
+    minutes: sessions.reduce((total, session) => total + (session.duration ?? 0), 0),
+  }))
+})
+
 const totalTasks = computed(() => daysList.value.reduce((sum, day) => sum + day.taskCount, 0))
 const totalMinutes = computed(() => daysList.value.reduce((sum, day) => sum + day.minutes, 0))
 const activeDays = computed(() => daysList.value.filter(day => day.minutes > 0).length)
@@ -197,6 +270,30 @@ const activeDays = computed(() => daysList.value.filter(day => day.minutes > 0).
   height: 13px;
   border-radius: 3px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.graph-cell {
+  cursor: pointer;
+  padding: 0;
+  border: 0;
+}
+
+.graph-cell:focus-visible {
+  outline: 2px solid var(--text-strong);
+  outline-offset: 2px;
+}
+
+.day-details {
+  border-top: 1px solid var(--border-color, #ddd);
+  padding-top: 0.75rem;
+}
+
+.day-details h3 {
+  margin: 0 0 0.5rem;
+}
+
+.task-session-group ul {
+  margin: 0.25rem 0 0.75rem;
 }
 
 .level-0 { background: color-mix(in srgb, var(--theme-color), var(--surface) 94%); }
