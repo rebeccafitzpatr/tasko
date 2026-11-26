@@ -1,7 +1,6 @@
 
 <template>
   <div>
-    <h1>Tasks</h1>
     <div class="task-form">
       <form @submit.prevent="addTask" class="details">
         <input v-model="newTask.name" placeholder="Task name" required :disabled="busy" />

@@ -1,6 +1,5 @@
 <template>
   <div>
-    <h1>Skills</h1>
     <form ref="addForm" class="details" @submit.prevent="addSkill">
       <label>Skill name <input ref="nameInput" v-model="name" name="skillName" placeholder="Skill name" :disabled="busy" /></label>
       <label>Parent skill

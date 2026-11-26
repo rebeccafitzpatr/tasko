@@ -1,6 +1,5 @@
 <template>
   <div class="analytics-root">
-    <h1>Analytics</h1>
     <p v-if="loadError" role="alert">{{ loadError }}</p>
     <button v-if="loadError" :disabled="isRefreshing" @click="loadData(true)">Retry loading</button>
     <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
