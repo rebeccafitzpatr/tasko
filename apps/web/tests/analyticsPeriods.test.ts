@@ -41,6 +41,38 @@ async function customRange(wrapper: ReturnType<typeof mount>) {
   await flushPromises()
 }
 describe('analytics periods', () => {
+  it('shows a single loading label inside the skill section during initial loading', async () => {
+    let finish!: (summary: AnalyticsSummary) => void
+    vi.mocked(fetchAnalytics).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const wrapper = mount(AnalyticsView)
+    wrappers.push(wrapper)
+    await flushPromises()
+    const section = wrapper.get('.skill-section')
+    expect(section.attributes('aria-busy')).toBe('true')
+    expect(section.get('[role="status"]').text()).toBe('loading')
+    expect(section.find('.skill-list').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Loading analytics...')
+    finish(current)
+    await flushPromises()
+    expect(section.attributes('aria-busy')).toBe('false')
+    expect(section.find('[role="status"]').exists()).toBe(false)
+    expect(section.find('.skill-list').exists()).toBe(true)
+  })
+
+  it('hides previous skill numbers while a new range is loading and restores them on success', async () => {
+    const wrapper = await render()
+    expect(wrapper.find('.skill-stats').exists()).toBe(true)
+    let finish!: (summary: AnalyticsSummary) => void
+    vi.mocked(fetchAnalytics).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    await wrapper.get('[name="period"]').setValue('today')
+    expect(wrapper.get('.skill-section [role="status"]').text()).toBe('loading')
+    expect(wrapper.find('.skill-stats').exists()).toBe(false)
+    finish(current)
+    await flushPromises()
+    expect(wrapper.find('.skill-loading').exists()).toBe(false)
+    expect(wrapper.find('.skill-stats').exists()).toBe(true)
+  })
+
   it('shows task and session counts for the same selected period as minutes', async () => {
     vi.mocked(fetchAnalytics).mockResolvedValue({
       totalPomodoros: 4, totalMinutes: 28,

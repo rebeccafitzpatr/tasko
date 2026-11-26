@@ -4,8 +4,7 @@
     <p v-if="loadError" role="alert">{{ loadError }}</p>
     <button v-if="loadError" :disabled="isRefreshing" @click="loadData(true)">Retry loading</button>
     <p v-if="saveMessage" role="status">{{ saveMessage }}</p>
-    <p v-if="isRefreshing" role="status">Loading analytics...</p>
-    <div v-if="analyticsMatchesRange" class="card skill-section">
+    <div v-if="isRefreshing || analyticsMatchesRange" class="card skill-section" :aria-busy="isRefreshing">
       <div class="skill-section-header">
         <h2>Time spent per skill</h2>
         <div class="skill-period-toggle" role="group" aria-label="Minutes period">
@@ -16,7 +15,8 @@
           <button type="button" :class="{ active: skillPeriod === 'year' }" @click="skillPeriod = 'year'">this year</button>
         </div>
       </div>
-      <ul class="skill-list">
+      <p v-if="isRefreshing" class="skill-loading" role="status">loading</p>
+      <ul v-else class="skill-list">
         <li v-for="skill in skills" :key="skill.id" class="skill-row">
           <span class="skill-name">{{ skillLabel(skill, skills) }}</span>
           <span class="skill-stats">
@@ -505,6 +505,14 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
   padding: 0;
   margin: 0;
   list-style: none;
+}
+
+.skill-loading {
+  display: grid;
+  place-items: center;
+  min-height: 8rem;
+  margin: 0;
+  color: var(--text-strong);
 }
 
 .skill-row {
