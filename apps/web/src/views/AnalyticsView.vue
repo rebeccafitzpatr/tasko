@@ -608,11 +608,16 @@ const recentPomodoros = computed(() => pomodoroStore.pomodoroLog ?? [])
 }
 
 .modal-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) 2.25rem;
   align-items: start;
-  justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.modal-header > div {
+  grid-column: 2;
+  text-align: center;
 }
 
 .modal-header h2,
