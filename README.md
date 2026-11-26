@@ -57,7 +57,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 
 ### Views
 
-* TasksView.vue : create task and view all tasks
+* TasksView.vue : create tasks and edit task names and skill assignments directly in their cards
 * LoginView.vue : log in or create an account; unauthenticated visitors are redirected here
 * SkillsView.vue : create skill form and view all skills
 * PomodoroView.vue : select task, set time, start/pause/reset task and pomodoro timer TimerCircle.vue
