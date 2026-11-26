@@ -139,7 +139,17 @@ label {
   font-weight: 400;
 }
 
+.signup-view .login-panel {
+  position: relative;
+  min-height: 446px;
+  --panel-padding: clamp(1.15rem, 3vh, 1.65rem);
+  --panel-inline-padding: var(--panel-padding);
+}
+
 .step-header {
+  position: absolute;
+  top: var(--panel-padding);
+  inset-inline: var(--panel-inline-padding);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -148,7 +158,6 @@ label {
 
 .step-header .step-progress { margin-left: auto; text-align: right; }
 .step-header .back-button { padding: 0; min-height: 0; }
-.signup-view .login-panel { min-height: 490px; }
 .display-name-step {
   display: grid;
   grid-template-rows: 1fr auto 1fr;
@@ -229,6 +238,6 @@ button[type='submit']:disabled {
   .login-panel .hint { font-size: 0.8rem; }
   label { gap: 0.35rem; }
   button[type='submit'] { padding: 0.5rem; }
-  .signup-view .login-panel { min-height: 365px; }
+  .signup-view .login-panel { min-height: 321px; --panel-padding: 0.65rem; --panel-inline-padding: 1.1rem; }
 }
 </style>
