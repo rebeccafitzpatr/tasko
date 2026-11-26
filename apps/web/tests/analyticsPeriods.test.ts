@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import AnalyticsView from '../src/views/AnalyticsView.vue'
+import { mockDialogs } from './dialogMocks'
 import { fetchAnalytics, fetchPomodoros, fetchSkills, fetchTasks, type AnalyticsSummary } from '../src/services/service'
 
 vi.mock('../src/services/service', () => ({
@@ -22,6 +23,7 @@ async function render() {
 }
 beforeEach(() => {
   vi.resetAllMocks()
+  mockDialogs()
   setActivePinia(createPinia())
   vi.mocked(fetchAnalytics).mockResolvedValue(current)
   vi.mocked(fetchPomodoros).mockResolvedValue({ items: [], limit: 25, hasMore: false, nextCursor: null })
@@ -34,6 +36,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 async function customRange(wrapper: ReturnType<typeof mount>) {
+  if (!wrapper.find('.history-filters').exists()) await wrapper.get('.filter-toggle').trigger('click')
   // Each committed date auto-applies and briefly disables the form, so settle between edits.
   await wrapper.get('[name="start"]').setValue('2026-01-08')
   await flushPromises()
@@ -64,6 +67,7 @@ describe('analytics periods', () => {
     expect(wrapper.find('.skill-stats').exists()).toBe(true)
     let finish!: (summary: AnalyticsSummary) => void
     vi.mocked(fetchAnalytics).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    await wrapper.get('.filter-toggle').trigger('click')
     await wrapper.get('[name="period"]').setValue('today')
     expect(wrapper.get('.skill-section [role="status"]').text()).toBe('loading')
     expect(wrapper.find('.skill-stats').exists()).toBe(false)
@@ -97,28 +101,30 @@ describe('analytics periods', () => {
     expect(stats()).toContain('28 mins')
   })
 
-  it('hides the date filters until Filter is toggled, keeping applied dates intact', async () => {
+  it('opens filters in a dialog and keeps applied dates after closing', async () => {
     const wrapper = await render()
-    const filters = wrapper.get('.history-filters')
     const toggle = wrapper.get('.filter-toggle')
-    // jsdom has no layout engine, so check the v-show inline style directly.
-    const filtersHidden = () => (filters.attributes('style') ?? '').includes('display: none')
-    expect(filtersHidden()).toBe(true)
+    expect(wrapper.find('dialog').exists()).toBe(false)
     expect(toggle.text()).toBe('Filter')
     await toggle.trigger('click')
-    expect(filtersHidden()).toBe(false)
-    expect(toggle.text()).toBe('Hide filter')
+    expect(wrapper.get('dialog').attributes('open')).toBeDefined()
+    expect(wrapper.get('dialog').attributes('aria-label')).toBe('Filter sessions')
+    expect(document.body.style.overflow).toBe('hidden')
     await customRange(wrapper)
-    await toggle.trigger('click')
-    expect(filtersHidden()).toBe(true)
+    await wrapper.findAll('button').find(button => button.text() === 'Done')!.trigger('click')
+    expect(wrapper.find('dialog').exists()).toBe(false)
+    expect(document.body.style.overflow).not.toBe('hidden')
     // The applied range still filters history and is flagged on the button.
     expect(toggle.text()).toContain('Filter ●')
     expect(fetchPomodoros).toHaveBeenLastCalledWith(expect.objectContaining({ start: '2026-01-08', end: '2026-01-14' }))
+    await toggle.trigger('click')
+    expect((wrapper.get('[name="start"]').element as HTMLInputElement).value).toBe('2026-01-08')
   })
   it('applies presets to all reports and supports custom dates', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-11-06T10:00:00Z'))
     const wrapper = await render()
+    await wrapper.get('.filter-toggle').trigger('click')
     await wrapper.get('[name="period"]').setValue('last7')
     await flushPromises()
     expect(fetchAnalytics).toHaveBeenLastCalledWith({ start: '2026-10-31', end: '2026-11-06' })
@@ -137,13 +143,14 @@ describe('analytics periods', () => {
   })
   it('shows current analytics errors without falsely displaying zero totals for a new range', async () => {
     const wrapper = await render()
+    await wrapper.get('.filter-toggle').trigger('click')
     await wrapper.get('[name="start"]').setValue('2026-01-08')
     await flushPromises()
     vi.mocked(fetchAnalytics).mockRejectedValueOnce(new Error('Analytics unavailable'))
     await wrapper.get('[name="end"]').setValue('2026-01-14')
     await flushPromises()
     expect(wrapper.find('.analytics-summary').exists()).toBe(false)
-    expect(wrapper.get('[role="alert"]').text()).toContain('Analytics unavailable')
+    expect(wrapper.findAll('[role="alert"]').some(alert => alert.text().includes('Analytics unavailable'))).toBe(true)
     await wrapper.findAll('button').find(button => button.text() === 'Retry loading')!.trigger('click')
     await flushPromises()
     expect(wrapper.get('.analytics-summary').text()).toContain('60 min')

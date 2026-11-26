@@ -54,8 +54,8 @@
             {{ activityLoading ? 'Loading graph...' : 'Activity graph' }}
           </button>
         </div>
-        <button class="filter-toggle" type="button" :aria-expanded="filtersOpen" @click="filtersOpen = !filtersOpen">
-          {{ filtersOpen ? 'Hide filter' : hasActiveFilter ? 'Filter ●' : 'Filter' }}
+        <button class="filter-toggle" type="button" aria-haspopup="dialog" :disabled="rangeBusy" @click="filtersOpen = true">
+          {{ hasActiveFilter ? 'Filter ●' : 'Filter' }}
         </button>
       </div>
       <div v-if="activityOpen" class="modal-backdrop" role="presentation" @click.self="activityOpen = false">
@@ -72,21 +72,29 @@
           <ActivityGraph :logs="activityLogs" :tasks="taskStore.tasks" />
         </section>
       </div>
-      <form v-show="filtersOpen" class="history-filters" @submit.prevent="applyRange">
-        <label>Period (NZ)
-          <select v-model="selectedPeriod" name="period" :disabled="rangeBusy" @change="choosePeriod">
-            <option v-for="period in reportPeriods" :key="period.value" :value="period.value">{{ period.label }}</option>
-          </select>
-        </label>
-        <label>Start date (NZ)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" @change="applyCustomDates" /></label>
-        <label>End date (NZ)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" @change="applyCustomDates" /></label>
-      </form>
-      <p v-if="rangeError" role="alert">{{ rangeError }}</p>
+      <ModalDialog v-if="filtersOpen" title="Filter sessions" @close="filtersOpen = false">
+        <form class="history-filters" @submit.prevent="applyRange">
+          <label>Period (NZ)
+            <select v-model="selectedPeriod" name="period" :disabled="rangeBusy" @change="choosePeriod">
+              <option v-for="period in reportPeriods" :key="period.value" :value="period.value">{{ period.label }}</option>
+            </select>
+          </label>
+          <label>Start date (NZ)<input v-model="startDate" name="start" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" @change="applyCustomDates" /></label>
+          <label>End date (NZ)<input v-model="endDate" name="end" type="date" :disabled="rangeBusy" @input="selectedPeriod = 'custom'" @change="applyCustomDates" /></label>
+        </form>
+        <p v-if="rangeError" role="alert">{{ rangeError }}</p>
+        <p v-if="isRefreshing" role="status">Updating reports...</p>
+        <p v-if="loadError || historyError" role="alert">{{ loadError || historyError }}</p>
+        <button type="button" @click="filtersOpen = false">Done</button>
+      </ModalDialog>
       <p v-if="isExporting" role="status">Exporting all matching sessions...</p>
       <p v-if="exportMessage" role="status">{{ exportMessage }}</p>
       <p v-if="exportError" role="alert">{{ exportError }} Retry with Export CSV.</p>
-      <SessionEditor v-if="editorOpen" :session="editingSession" :tasks="tasks" :skills="skills"
-        @saved="sessionSaved" @cancel="editorOpen = false" />
+      <ModalDialog v-if="editorOpen" :title="editingSession ? 'Edit session' : 'Add manual session'"
+        :busy="editorSaving" @close="editorOpen = false">
+        <SessionEditor :session="editingSession" :tasks="tasks" :skills="skills" :show-heading="false"
+          @saving="editorSaving = $event" @saved="sessionSaved" @cancel="editorOpen = false" />
+      </ModalDialog>
       <p v-if="historyLoading" role="status">Loading sessions...</p>
       <p v-if="historyError" role="alert">{{ historyError }}</p>
       <button v-if="historyError" :disabled="historyLoading || isRefreshing" @click="retryHistory">Retry history</button>
@@ -139,6 +147,7 @@ import { useSkillStore } from '../stores/skillStore'
 import { usePomodoroStore } from '../stores/pomodoroStore'
 import { useAnalyticsStore } from '../stores/analyticsStore'
 import SessionEditor from '../components/SessionEditor.vue'
+import ModalDialog from '../components/ModalDialog.vue'
 import ActivityGraph from '../components/ActivityGraph.vue'
 import { exportHistory, fetchActivityPomodoros, type PomodoroLog, type DateRange } from '../services/service'
 import { skillLabel } from '../services/skillLabels'
@@ -153,6 +162,7 @@ const analyticsStore = useAnalyticsStore()
 const loadError = ref('')
 const saveMessage = ref('')
 const editorOpen = ref(false)
+const editorSaving = ref(false)
 const editingSession = ref<PomodoroLog | null>(null)
 const isRefreshing = ref(false)
 const historyLoading = ref(false)
@@ -182,7 +192,7 @@ let retryPage: { cursor: string | null; action: PageAction } = { cursor: null, a
 let previousBodyOverflow = ''
 let previousHtmlOverflow = ''
 
-watch(activityOpen, (isOpen) => {
+watch(() => activityOpen.value || filtersOpen.value || editorOpen.value, (isOpen) => {
   if (isOpen) {
     previousBodyOverflow = document.body.style.overflow
     previousHtmlOverflow = document.documentElement.style.overflow

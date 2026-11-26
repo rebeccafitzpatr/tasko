@@ -1,6 +1,6 @@
 <template>
   <form class="session-editor" novalidate @submit.prevent="save">
-    <h3>{{ session ? 'Edit session' : 'Add manual session' }}</h3>
+    <h3 v-if="showHeading">{{ session ? 'Edit session' : 'Add manual session' }}</h3>
     <p v-if="session">Original type: {{ session.type }}. Editing does not change the session type.</p>
     <p v-if="session?.skillPath">Recorded skill: {{ session.skillPath }}. Unchanged assignments preserve this historical path.</p>
     <fieldset :disabled="isSaving">
@@ -45,8 +45,10 @@ import { createManualSession, editSession, type PomodoroLog, type Skill, type Ta
 import { skillLabel } from '../services/skillLabels'
 import { fromNzInput, toNzInput } from '../services/timeZone'
 
-const props = defineProps<{ session: PomodoroLog | null; tasks: Task[]; skills: Skill[] }>()
-const emit = defineEmits<{ saved: [session: PomodoroLog]; cancel: [] }>()
+const props = withDefaults(defineProps<{ session: PomodoroLog | null; tasks: Task[]; skills: Skill[]; showHeading?: boolean }>(), {
+  showHeading: true,
+})
+const emit = defineEmits<{ saved: [session: PomodoroLog]; cancel: []; saving: [value: boolean] }>()
 const completedAt = ref('')
 const duration = ref<number | string>(25)
 const taskId = ref<number | null>(null)
@@ -93,6 +95,7 @@ async function save() {
     return
   }
   isSaving.value = true
+  emit('saving', true)
   try {
     const details = {
       taskId: taskId.value, skillId: skillId.value,
@@ -106,6 +109,7 @@ async function save() {
     error.value = cause instanceof Error ? cause.message : 'Unable to save this session. Try again.'
   } finally {
     isSaving.value = false
+    emit('saving', false)
   }
 }
 </script>

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import AnalyticsView from '../src/views/AnalyticsView.vue'
+import { mockDialogs } from './dialogMocks'
 import { exportHistory, fetchAnalytics, fetchPomodoros, fetchSkills, fetchTasks } from '../src/services/service'
 import { downloadHistory } from '../src/services/historyDownload'
 
@@ -23,6 +24,7 @@ function exportButton(wrapper: ReturnType<typeof mount>) {
 }
 beforeEach(() => {
   vi.resetAllMocks()
+  mockDialogs()
   setActivePinia(createPinia())
   vi.mocked(fetchAnalytics).mockResolvedValue({ totalPomodoros: 145, totalMinutes: 145 })
   vi.mocked(fetchSkills).mockResolvedValue([])
@@ -38,10 +40,12 @@ afterEach(() => {
 describe('CSV history export UI', () => {
   it('exports the auto-applied range across older pages, not pagination cursors', async () => {
     const wrapper = await render()
+    await wrapper.get('.filter-toggle').trigger('click')
     await wrapper.get('[name="start"]').setValue('2026-01-01')
     await flushPromises()
     await wrapper.get('[name="end"]').setValue('2026-01-31')
     await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'Done')!.trigger('click')
     await wrapper.findAll('button').find(button => button.text() === 'Older sessions')!.trigger('click')
     await flushPromises()
     const csv = new Blob(['all 145 records'], { type: 'text/csv' })
@@ -61,7 +65,7 @@ describe('CSV history export UI', () => {
     await exportButton(wrapper).trigger('click')
     expect(wrapper.text()).toContain('Exporting all matching sessions')
     expect(exportButton(wrapper).attributes('disabled')).toBeDefined()
-    expect(wrapper.get('[name="period"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.filter-toggle').attributes('disabled')).toBeDefined()
     finish(null)
     await flushPromises()
     expect(downloadHistory).not.toHaveBeenCalled()

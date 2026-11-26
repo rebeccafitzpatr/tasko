@@ -4,6 +4,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import SessionEditor from '../src/components/SessionEditor.vue'
 import AnalyticsView from '../src/views/AnalyticsView.vue'
+import { mockDialogs } from './dialogMocks'
 import {
   createManualSession, editSession, fetchTasks, fetchSkills, fetchPomodoros, fetchAnalytics,
   type PomodoroLog,
@@ -34,6 +35,7 @@ function editor(session: PomodoroLog | null = null) {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  mockDialogs()
   setActivePinia(createPinia())
   vi.mocked(createManualSession).mockResolvedValue(manual)
   vi.mocked(editSession).mockResolvedValue({ ...manual, duration: 45 })
@@ -141,6 +143,36 @@ describe('session history and analytics refresh', () => {
     return wrapper
   }
 
+  it('opens manual entry in a modal and closes without saving on Escape', async () => {
+    const wrapper = await analytics()
+    await wrapper.findAll('button').find(button => button.text() === 'Add manual session')!.trigger('click')
+    const dialog = wrapper.get('dialog')
+    expect(dialog.attributes('open')).toBeDefined()
+    expect(dialog.attributes('aria-label')).toBe('Add manual session')
+    expect(dialog.findComponent(SessionEditor).exists()).toBe(true)
+    expect(document.body.style.overflow).toBe('hidden')
+    await dialog.trigger('cancel')
+    expect(wrapper.find('dialog').exists()).toBe(false)
+    expect(document.body.style.overflow).not.toBe('hidden')
+    expect(createManualSession).not.toHaveBeenCalled()
+  })
+
+  it('keeps the session modal open during saving and displays save failures inside it', async () => {
+    const wrapper = await analytics()
+    let fail!: (cause: Error) => void
+    vi.mocked(createManualSession).mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject }))
+    await wrapper.findAll('button').find(button => button.text() === 'Add manual session')!.trigger('click')
+    await wrapper.getComponent(SessionEditor).get('form').trigger('submit')
+    expect(wrapper.get('[aria-label="Close Add manual session"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('dialog').trigger('cancel')
+    expect(wrapper.find('dialog').exists()).toBe(true)
+    fail(new Error('Could not save session.'))
+    await flushPromises()
+    expect(wrapper.get('dialog [role="alert"]').text()).toContain('Could not save session.')
+    await wrapper.get('[aria-label="Close Add manual session"]').trigger('click')
+    expect(wrapper.find('dialog').exists()).toBe(false)
+  })
+
   it('refreshes displayed records and totals after a manual save and an edit', async () => {
     const wrapper = await analytics()
     await wrapper.findAll('button').find(button => button.text() === 'Add manual session')!.trigger('click')
@@ -234,6 +266,7 @@ describe('session history and analytics refresh', () => {
 
   it('applies inclusive date filters to history and aggregates and resets navigation', async () => {
     const wrapper = await analytics()
+    await wrapper.get('.filter-toggle').trigger('click')
     await wrapper.get('[name="start"]').setValue('2026-01-01')
     await flushPromises()
     await wrapper.get('[name="end"]').setValue('2026-01-31')
@@ -249,6 +282,7 @@ describe('session history and analytics refresh', () => {
 
   it('rejects reversed dates without requesting another page', async () => {
     const wrapper = await analytics()
+    await wrapper.get('.filter-toggle').trigger('click')
     await wrapper.get('[name="start"]').setValue('2026-02-01')
     await flushPromises()
     await wrapper.get('[name="end"]').setValue('2026-01-01')
