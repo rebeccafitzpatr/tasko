@@ -58,7 +58,7 @@ Its really driven by the fact that I really wish that something this intuitive w
 ### Views
 
 * TasksView.vue : create tasks and edit task names and skill assignments directly in their cards
-* LoginView.vue : log in or create an account; unauthenticated visitors are redirected here
+* LoginView.vue : log in or create an account in two steps (email/password, then optional display name); unauthenticated visitors are redirected here
 * SkillsView.vue : create skills and edit them in their cards; Add sub-skill selects the parent and scrolls to and focuses the creation form
 * PomodoroView.vue : select task, set time, start/pause/reset task and pomodoro timer TimerCircle.vue
 * AnalyticsView.vue : Total tasks, pomodoros and minutes, per skill task and pomodoro counts. Session entry/editing and date filters open in modal dialogs; filters still apply automatically. While loading, skill figures are replaced by a single centered loading label in that section.
