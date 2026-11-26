@@ -33,6 +33,8 @@ Its really driven by the fact that I really wish that something this intuitive w
 - apps/backend/auth.ts — register/login/logout/me endpoints and the requireAuth bearer-token middleware; passwords hashed with Bun.password (argon2id), tokens stored as SHA-256 hashes with a 30-day expiry
 - backend/index.ts — mount API routes and initialize DB (updated)
 - Session logs are the source of truth for time analytics; task and skill minute totals are compatibility counters.
+- Per-skill today/week/year figures count matching sessions and their minutes, plus distinct assigned tasks; skill-only sessions contribute time and sessions but no task. Parent skills include sessions recorded under their sub-skills. The history date filter also limits these figures.
+- Older backend versions omit period-specific task and session counts; the client derives all three period figures from paginated session history until the backend is updated.
 - Session validation, timestamp rules, deletion snapshots, and migration steps are documented in [migrations/session-history.md](./migrations/session-history.md).
 - Timer recovery and retry-safe completion require [20261106_timer_completion.sql](./migrations/20261106_timer_completion.sql) after the session-history migration, before deploying the updated app.
 - Skill hierarchy requires [20261106_skill_hierarchy.sql](./migrations/20261106_skill_hierarchy.sql) after both earlier migrations, before deploying the updated API/client. Existing skills remain standalone.

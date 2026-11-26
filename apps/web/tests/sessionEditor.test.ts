@@ -181,7 +181,12 @@ describe('session history and analytics refresh', () => {
     })
     vi.mocked(fetchAnalytics).mockResolvedValue({
       totalPomodoros: 235, totalMinutes: 235, totalTasks: 1,
-      breakdown: [{ skillId: 4, minutes: 235, pomodoros: 235, todayMinutes: 140, weekMinutes: 200, yearMinutes: 235 }],
+      breakdown: [{
+        skillId: 4, minutes: 235, pomodoros: 235,
+        todayTasks: 1, weekTasks: 2, yearTasks: 3,
+        todayPomodoros: 140, weekPomodoros: 200, yearPomodoros: 235,
+        todayMinutes: 140, weekMinutes: 200, yearMinutes: 235,
+      }],
     })
     const wrapper = await analytics()
     vi.mocked(fetchPomodoros).mockResolvedValueOnce({
@@ -192,7 +197,7 @@ describe('session history and analytics refresh', () => {
     expect(fetchPomodoros).toHaveBeenLastCalledWith({ limit: 25, cursor: 'older-cursor' })
     expect(wrapper.find('tbody').text()).toContain('Older session')
     expect(wrapper.findAll('button').find(button => button.text() === 'Newer sessions')!.attributes('disabled')).toBeUndefined()
-    expect(wrapper.find('.skill-stats').text()).toContain('235 sessions')
+    expect(wrapper.find('.skill-stats').text()).toContain('140 sessions')
     expect(wrapper.find('.skill-stats').text()).toContain('140 mins')
     expect(wrapper.findAll('button').find(button => button.text() === 'Older sessions')!.attributes('disabled')).toBeDefined()
     vi.mocked(fetchPomodoros).mockResolvedValueOnce({

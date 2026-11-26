@@ -21,7 +21,7 @@
           <span class="skill-name">{{ skillLabel(skill, skills) }}</span>
           <span class="skill-stats">
             <span>{{ periodTasksForSkill(skill.id) }} {{ periodTasksForSkill(skill.id) === 1 ? 'task' : 'tasks' }}</span>
-            <span>{{ periodPomodorosForSkill(skill.id) }} sessions</span>
+            <span>{{ periodPomodorosForSkill(skill.id) }} {{ periodPomodorosForSkill(skill.id) === 1 ? 'session' : 'sessions' }}</span>
             <span>{{ periodMinutesForSkill(skill.id) }} mins</span>
           </span>
         </li>

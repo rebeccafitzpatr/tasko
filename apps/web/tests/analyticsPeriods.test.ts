@@ -41,6 +41,30 @@ async function customRange(wrapper: ReturnType<typeof mount>) {
   await flushPromises()
 }
 describe('analytics periods', () => {
+  it('shows task and session counts for the same selected period as minutes', async () => {
+    vi.mocked(fetchAnalytics).mockResolvedValue({
+      totalPomodoros: 4, totalMinutes: 28,
+      breakdown: [{
+        skillId: 1, todayTasks: 1, todayPomodoros: 1, todayMinutes: 3,
+        weekTasks: 2, weekPomodoros: 3, weekMinutes: 15,
+        yearTasks: 2, yearPomodoros: 4, yearMinutes: 28,
+      }],
+    })
+    const wrapper = await render()
+    const stats = () => wrapper.find('.skill-stats').text()
+    expect(stats()).toContain('1 task')
+    expect(stats()).toContain('1 session')
+    expect(stats()).toContain('3 mins')
+    await wrapper.findAll('button').find(button => button.text() === 'this week')!.trigger('click')
+    expect(stats()).toContain('2 tasks')
+    expect(stats()).toContain('3 sessions')
+    expect(stats()).toContain('15 mins')
+    await wrapper.findAll('button').find(button => button.text() === 'this year')!.trigger('click')
+    expect(stats()).toContain('2 tasks')
+    expect(stats()).toContain('4 sessions')
+    expect(stats()).toContain('28 mins')
+  })
+
   it('hides the date filters until Filter is toggled, keeping applied dates intact', async () => {
     const wrapper = await render()
     const filters = wrapper.get('.history-filters')

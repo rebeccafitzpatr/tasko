@@ -1,3 +1,6 @@
+import { periodRange } from './reportPeriods'
+import { fromNzInput } from './timeZone'
+
 export type Skill = {
   id: number;
   name: string;
@@ -270,19 +273,28 @@ export async function fetchPomodoros(options: HistoryOptions = {}): Promise<Sess
   return page;
 }
 
-export async function fetchActivityPomodoros(): Promise<PomodoroLog[]> {
+async function fetchAllPomodoros(range: DateRange = {}): Promise<PomodoroLog[]> {
   const sessions: PomodoroLog[] = []
   let cursor: string | undefined
+  const cursors = new Set<string>()
 
   while (true) {
-    const page = await fetchPomodoros({ limit: 100, cursor })
+    const page = await fetchPomodoros({ ...range, limit: 100, cursor })
     sessions.push(...page.items)
 
-    if (!page.hasMore || !page.nextCursor) break
+    if (!page.hasMore) break
+    if (!page.nextCursor || cursors.has(page.nextCursor)) {
+      throw new Error('Session history pagination is incomplete. Retry loading.')
+    }
+    cursors.add(page.nextCursor)
     cursor = page.nextCursor
   }
 
   return sessions
+}
+
+export async function fetchActivityPomodoros(): Promise<PomodoroLog[]> {
+  return fetchAllPomodoros()
 }
 
 function isSessionPage(value: unknown): value is SessionPage {
@@ -325,8 +337,70 @@ export async function editSession(id: number, details: SessionDetails): Promise<
   return handleResponse<PomodoroLog>(res);
 }
 
-// Analytics (optional)
+// Analytics
 export async function fetchAnalytics(range: DateRange = {}): Promise<AnalyticsSummary> {
   const res = await fetch(`${API_BASE}/analytics/summary?${rangeParams(range)}`, { headers: authHeaders() });
-  return handleResponse<AnalyticsSummary>(res);
+  const summary = await handleResponse<AnalyticsSummary>(res);
+  const periodFields = [
+    'todayTasks', 'weekTasks', 'yearTasks',
+    'todayPomodoros', 'weekPomodoros', 'yearPomodoros',
+    'todayMinutes', 'weekMinutes', 'yearMinutes',
+  ] as const;
+  if (!Array.isArray(summary?.breakdown) || summary.breakdown.some(skill =>
+    skill === null || typeof skill !== 'object' || typeof skill.skillId !== 'number'
+  )) {
+    throw new Error('Skill analytics response is invalid. Retry loading.');
+  }
+  if (summary.breakdown.some(skill =>
+    periodFields.some(field => typeof skill[field] !== 'number' || !Number.isFinite(skill[field]))
+  )) {
+    await fillLegacySkillPeriods(summary.breakdown, range);
+  }
+  return summary;
+}
+
+async function fillLegacySkillPeriods(breakdown: NonNullable<AnalyticsSummary['breakdown']>, range: DateRange) {
+  const now = new Date()
+  const periods = (['today', 'week', 'year'] as const).map(period => {
+    const start = periodRange(period, now).start!
+    const instant = fromNzInput(`${start}T00:00:00`)
+    if (!instant) throw new Error('Could not determine skill reporting period.')
+    return { start, instant: instant.getTime() }
+  })
+  const yearStart = periods[2]!.start
+  const today = periodRange('today', now).end!
+  const start = range.start && range.start > yearStart ? range.start : yearStart
+  const end = range.end && range.end < today ? range.end : today
+  const sessions = start <= end ? await fetchAllPomodoros({ start, end }) : []
+  const stats = new Map<number, { tasks: Set<number>[]; counts: number[]; minutes: number[] }>()
+  for (const skill of breakdown) {
+    stats.set(skill.skillId!, { tasks: [new Set(), new Set(), new Set()], counts: [0, 0, 0], minutes: [0, 0, 0] })
+  }
+  const nowSeconds = Math.floor(now.getTime() / 1000) * 1000
+  for (const session of sessions) {
+    const timestamp = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(session.completedAt)
+      ? `${session.completedAt.replace(' ', 'T')}Z` : session.completedAt
+    const completed = Date.parse(timestamp)
+    if (!Number.isFinite(completed) || !Number.isFinite(session.duration)) {
+      throw new Error('Session history contains invalid data. Retry loading.')
+    }
+    if (completed > nowSeconds) continue
+    for (const skillId of new Set([session.skillId, session.parentSkillId])) {
+      if (skillId == null) continue
+      const skill = stats.get(skillId)
+      if (!skill) continue
+      periods.forEach((period, index) => {
+        if (completed < period.instant) return
+        skill.counts[index]!++
+        skill.minutes[index]! += session.duration
+        if (session.taskId != null) skill.tasks[index]!.add(session.taskId)
+      })
+    }
+  }
+  for (const skill of breakdown) {
+    const values = stats.get(skill.skillId!)!
+    ;[skill.todayTasks, skill.weekTasks, skill.yearTasks] = values.tasks.map(tasks => tasks.size)
+    ;[skill.todayPomodoros, skill.weekPomodoros, skill.yearPomodoros] = values.counts
+    ;[skill.todayMinutes, skill.weekMinutes, skill.yearMinutes] = values.minutes
+  }
 }
