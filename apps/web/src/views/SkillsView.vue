@@ -1,8 +1,8 @@
 <template>
   <div>
     <h1>Skills</h1>
-    <form class="details" @submit.prevent="addSkill">
-      <label>Skill name <input v-model="name" name="skillName" placeholder="Skill name" :disabled="busy" /></label>
+    <form ref="addForm" class="details" @submit.prevent="addSkill">
+      <label>Skill name <input ref="nameInput" v-model="name" name="skillName" placeholder="Skill name" :disabled="busy" /></label>
       <label>Parent skill
         <select v-model="parentId" name="parentId" :disabled="busy">
           <option :value="null">Standalone / top-level skill</option>
@@ -64,6 +64,8 @@ import { useSkillStore, type Skill } from '../stores/skillStore'
 import SkillEditForm from '../components/SkillEditForm.vue'
 
 const store = useSkillStore()
+const addForm = ref<HTMLFormElement | null>(null)
+const nameInput = ref<HTMLInputElement | null>(null)
 const name = ref('')
 const parentId = ref<number | null>(null)
 const editingId = ref<number | null>(null)
@@ -98,6 +100,8 @@ function addChild(id: number) {
   clearForm()
   parentId.value = id
   error.value = ''
+  nameInput.value?.focus({ preventScroll: true })
+  addForm.value?.scrollIntoView({ block: 'center' })
 }
 async function load() {
   busy.value = true
