@@ -1,5 +1,5 @@
 <template>
-  <div class="centered-container">
+  <div class="centered-container" :class="{ 'auth-layout': route.path === '/login' }">
     
     <nav>
       
@@ -26,11 +26,12 @@
 </template>
 
 <script setup lang="ts">
-  import { useRouter } from 'vue-router'
+  import { useRoute, useRouter } from 'vue-router'
   import { useAuthStore } from './stores/authStore'
 
   const auth = useAuthStore()
   const router = useRouter()
+  const route = useRoute()
 
   async function logout() {
     try {
@@ -67,6 +68,31 @@
 
 .page-content {
   padding-top: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.centered-container.auth-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding-top: clamp(0.75rem, 3vh, 1.5rem);
+  padding-bottom: 0;
+}
+
+.auth-layout nav {
+  flex-shrink: 0;
+}
+
+.auth-layout .page-content {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  padding-block: clamp(0.75rem, 2vh, 1.25rem);
+}
+
+@media (max-height: 600px) {
+  .centered-container.auth-layout { padding-top: 0.5rem; }
+  .auth-layout .page-content { padding-block: 0.5rem; }
 }
 
 .nav-user {

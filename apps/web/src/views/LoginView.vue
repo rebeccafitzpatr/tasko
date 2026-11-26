@@ -1,5 +1,5 @@
 <template>
-  <section class="login-view">
+  <section class="login-view" :class="{ 'signup-view': isRegistering }">
     <h1>{{ isRegistering ? 'Create your account' : 'Welcome back' }}</h1>
     <form class="login-panel" @submit.prevent="submit">
       <label>
@@ -7,7 +7,7 @@
         <input v-model="email" type="email" autocomplete="email" required placeholder="you@example.com" />
       </label>
       <label v-if="isRegistering">
-        Display name <span class="optional">(optional)</span>
+        <span>Display name <span class="optional">(optional)</span></span>
         <input v-model="displayName" type="text" autocomplete="nickname" maxlength="255" placeholder="How should we greet you?" />
       </label>
       <label>
@@ -19,9 +19,10 @@
           required
           :minlength="isRegistering ? 8 : undefined"
           placeholder="Your password"
+          :aria-describedby="isRegistering ? 'password-hint' : undefined"
         />
+        <span v-if="isRegistering" id="password-hint" class="hint">Use at least 8 characters.</span>
       </label>
-      <p v-if="isRegistering" class="hint">Use at least 8 characters.</p>
 
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
@@ -78,13 +79,20 @@ async function submit() {
 </script>
 
 <style scoped>
+.login-view h1 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.9rem, 4.25vw, 2.5rem);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
 .login-panel {
   max-width: 420px;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: clamp(1.15rem, 3vh, 1.65rem);
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 1.1rem;
   text-align: left;
   background: var(--theme-light);
   border: 1px solid var(--theme-medium);
@@ -94,7 +102,7 @@ async function submit() {
 label {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.5rem;
   font-weight: 600;
 }
 
@@ -142,14 +150,30 @@ button[type='submit']:disabled {
   cursor: pointer;
 }
 
+.switch-mode:hover:not(:disabled) {
+  color: var(--theme-color);
+  background: none;
+  border-color: transparent;
+}
+
 .hint {
   margin: 0;
   font-size: 0.9rem;
+  font-weight: 400;
 }
 
 .error {
   margin: 0;
   color: #b3261e;
   font-weight: 600;
+}
+
+@media (max-height: 600px) {
+  .login-view h1 { margin-bottom: 0.75rem; font-size: 1.75rem; }
+  .login-panel { padding: 0.65rem 1.1rem; gap: 0.6rem; font-size: max(16px, 0.9rem); }
+  .login-panel .hint { font-size: 0.8rem; }
+  label { gap: 0.35rem; }
+  button[type='submit'] { padding: 0.5rem; }
+  .signup-view .login-panel { gap: 0.2rem; }
 }
 </style>
