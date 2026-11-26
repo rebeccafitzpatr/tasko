@@ -19,7 +19,9 @@
       </div>
     </nav>
   
-    <router-view />
+    <main class="page-content">
+      <router-view />
+    </main>
   </div>
 </template>
 
@@ -61,6 +63,10 @@
 
 .centered-container nav .logo {
   margin: 0 2px;
+}
+
+.page-content {
+  padding-top: clamp(1.5rem, 3vw, 2.5rem);
 }
 
 .nav-user {
