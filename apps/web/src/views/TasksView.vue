@@ -1,7 +1,6 @@
 
 <template>
   <div>
-    <h1>Tasks</h1>
     <div class="task-form">
       <form @submit.prevent="addTask" class="details">
         <input v-model="newTask.name" placeholder="Task name" required :disabled="busy" />
@@ -17,8 +16,7 @@
           "
           @update:modelValue="clearSkillError"
         />
-        <button type="submit" :disabled="busy">{{ editingId === null ? 'Add Task' : 'Save task' }}</button>
-        <button v-if="editingId !== null" type="button" :disabled="busy" @click="cancelEdit">Cancel</button>
+        <button type="submit" :disabled="busy">Add Task</button>
       </form>
       <p v-if="skillError" class="form-error" role="alert">{{ skillError }}</p>
       <p v-if="busy" role="status">Loading or saving tasks...</p>
@@ -29,11 +27,29 @@
       <ul>
         <li v-for="task in tasks" :key="task.id">
           <div class="task-item">
-            <span class="item-label">{{ task.name }} ({{ getSkillName(task.skillId) }})</span>
-            <div class="item-actions">
-              <button :disabled="busy" @click="editTask(task)">Edit</button>
-              <button class="delete-button" :disabled="busy" @click="deleteTask(task.id)">Delete</button>
-            </div>
+            <form v-if="editingId === task.id" class="task-edit" @submit.prevent="saveEdit">
+              <label>Task name
+                <input v-model="editName" name="editTaskName" :disabled="busy" v-focus />
+              </label>
+              <div class="task-edit-skill">
+                <span>Skill</span>
+                <CustomSelect v-model="editSkillId" placeholder="Select skill" :disabled="busy"
+                  :options="skills.map(skill => ({ value: skill.id, label: skillLabel(skill, skills) }))"
+                  @update:modelValue="editError = ''" />
+              </div>
+              <div class="item-actions">
+                <button type="submit" :disabled="busy">Save task</button>
+                <button type="button" :disabled="busy" @click="cancelEdit">Cancel</button>
+              </div>
+              <p v-if="editError" class="form-error" role="alert">{{ editError }}</p>
+            </form>
+            <template v-else>
+              <span class="item-label">{{ task.name }} ({{ getSkillName(task.skillId) }})</span>
+              <div class="item-actions">
+                <button :disabled="busy || editingId !== null" @click="editTask(task)">Edit</button>
+                <button class="delete-button" :disabled="busy" @click="deleteTask(task.id)">Delete</button>
+              </div>
+            </template>
           </div>
         </li>
       </ul>
@@ -42,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, type ObjectDirective } from 'vue'
 import { useTaskStore, type Task } from '../stores/taskStore'
 import { useSkillStore } from '../stores/skillStore'
 import CustomSelect from '../components/CustomSelect.vue'
@@ -57,6 +73,10 @@ const skillError = ref('')
 const busy = ref(false)
 const loadFailed = ref(false)
 const editingId = ref<number | null>(null)
+const editName = ref('')
+const editSkillId = ref<number | null>(null)
+const editError = ref('')
+const vFocus: ObjectDirective<HTMLInputElement> = { mounted: element => element.focus() }
 
 const newTask = ref({
   id: 0,
@@ -79,10 +99,9 @@ async function addTask() {
   skillError.value = ''
   busy.value = true
   try {
-    const task = { ...newTask.value, name: newTask.value.name.trim(), id: editingId.value ?? 0 }
-    if (editingId.value === null) await taskStore.addTask(task)
-    else await taskStore.updateTask(task)
-    cancelEdit()
+    await taskStore.addTask({ ...newTask.value, name: newTask.value.name.trim() })
+    newTask.value.name = ''
+    newTask.value.skillId = null
   } catch (cause) {
     skillError.value = cause instanceof Error ? cause.message : 'Unable to save task.'
   } finally { busy.value = false }
@@ -106,13 +125,36 @@ async function deleteTask(id: number) {
 
 function editTask(task: Task) {
   editingId.value = task.id
-  newTask.value.name = task.name
-  newTask.value.skillId = task.skillId ?? null
+  editName.value = task.name
+  editSkillId.value = task.skillId ?? null
+  editError.value = ''
 }
 function cancelEdit() {
   editingId.value = null
-  newTask.value.name = ''
-  newTask.value.skillId = null
+  editName.value = ''
+  editSkillId.value = null
+  editError.value = ''
+}
+async function saveEdit() {
+  if (busy.value || editingId.value === null) return
+  if (!editName.value.trim()) {
+    editError.value = 'Enter a task name.'
+    return
+  }
+  if (!editSkillId.value) {
+    editError.value = 'Choose a skill before saving this task.'
+    return
+  }
+  busy.value = true
+  editError.value = ''
+  try {
+    await taskStore.updateTask({
+      id: editingId.value, name: editName.value.trim(), skillId: editSkillId.value,
+    })
+    cancelEdit()
+  } catch (cause) {
+    editError.value = cause instanceof Error ? cause.message : 'Unable to save task. Your input has been kept.'
+  } finally { busy.value = false }
 }
 async function load() {
   busy.value = true
@@ -171,4 +213,11 @@ function getSkillName(skillId: number | null | undefined) {
 
 }
 
+</style>
+
+<style scoped>
+.task-edit { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; min-width: 0; }
+.task-edit label, .task-edit-skill { display: flex; flex: 1 1 12rem; flex-direction: column; gap: 0.5rem; min-width: 0; text-align: left; }
+.task-edit .custom-select { min-width: 0; }
+.task-edit .form-error { box-sizing: border-box; margin: 0; }
 </style>

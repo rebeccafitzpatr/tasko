@@ -1,6 +1,5 @@
 <template>
   <section class="settings-view">
-    <h1>Settings</h1>
     <div class="settings-panel">
       <h2>Colour theme</h2>
       <p class="settings-description">Choose the colour used throughout Tasko.</p>

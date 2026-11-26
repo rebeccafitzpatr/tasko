@@ -1,6 +1,6 @@
 <template>
   <form class="session-editor" novalidate @submit.prevent="save">
-    <h3>{{ session ? 'Edit session' : 'Add manual session' }}</h3>
+    <h3 v-if="showHeading">{{ session ? 'Edit session' : 'Add manual session' }}</h3>
     <p v-if="session">Original type: {{ session.type }}. Editing does not change the session type.</p>
     <p v-if="session?.skillPath">Recorded skill: {{ session.skillPath }}. Unchanged assignments preserve this historical path.</p>
     <fieldset :disabled="isSaving">
@@ -26,16 +26,16 @@
           <option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skillLabel(skill, skills) }}</option>
         </select>
       </label>
-      <p v-if="taskId !== null">The skill is determined by the selected task.</p>
-      <p v-if="session && (session.taskId === null && session.taskName || session.skillId === null && session.skillName)">
+      <p v-if="taskId !== null" class="session-note">The skill is determined by the selected task.</p>
+      <p v-if="session && (session.taskId === null && session.taskName || session.skillId === null && session.skillName)" class="session-note">
         Deleted task/skill names and paths remain in history unless you reassign the session.
       </p>
+      <p v-if="error" class="session-error" role="alert">{{ error }}</p>
       <div class="session-actions">
         <button type="submit">{{ isSaving ? 'Saving...' : 'Save session' }}</button>
-        <button type="button" @click="emit('cancel')">Cancel</button>
+        <button class="cancel-button" type="button" @click="emit('cancel')">Cancel</button>
       </div>
     </fieldset>
-    <p v-if="error" class="session-error" role="alert">{{ error }}</p>
   </form>
 </template>
 
@@ -45,8 +45,10 @@ import { createManualSession, editSession, type PomodoroLog, type Skill, type Ta
 import { skillLabel } from '../services/skillLabels'
 import { fromNzInput, toNzInput } from '../services/timeZone'
 
-const props = defineProps<{ session: PomodoroLog | null; tasks: Task[]; skills: Skill[] }>()
-const emit = defineEmits<{ saved: [session: PomodoroLog]; cancel: [] }>()
+const props = withDefaults(defineProps<{ session: PomodoroLog | null; tasks: Task[]; skills: Skill[]; showHeading?: boolean }>(), {
+  showHeading: true,
+})
+const emit = defineEmits<{ saved: [session: PomodoroLog]; cancel: []; saving: [value: boolean] }>()
 const completedAt = ref('')
 const duration = ref<number | string>(25)
 const taskId = ref<number | null>(null)
@@ -93,6 +95,7 @@ async function save() {
     return
   }
   isSaving.value = true
+  emit('saving', true)
   try {
     const details = {
       taskId: taskId.value, skillId: skillId.value,
@@ -106,21 +109,40 @@ async function save() {
     error.value = cause instanceof Error ? cause.message : 'Unable to save this session. Try again.'
   } finally {
     isSaving.value = false
+    emit('saving', false)
   }
 }
 </script>
 
 <style scoped>
-.session-editor { margin: 1rem 0; }
+.session-editor { margin: 0; }
 fieldset {
+  min-width: 0;
+  margin: 0;
   border: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 1.25rem 1rem;
 }
-label { display: flex; flex-direction: column; gap: 0.5rem; text-align: left; }
-input, select { width: 100%; min-width: 0; box-sizing: border-box; }
-.session-actions { display: flex; gap: 0.5rem; align-items: flex-end; }
-.session-error { color: var(--theme-text); border-left: 3px solid var(--theme-color); padding: 0.75rem; }
+label { display: flex; min-width: 0; flex-direction: column; gap: 0.5rem; text-align: left; font-weight: 600; }
+input, select { width: 100%; min-width: 0; min-height: 46px; box-sizing: border-box; font-weight: 400; }
+.session-note { grid-column: 1 / -1; margin: 0; color: var(--text); font-size: 0.9rem; text-align: left; }
+.session-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.session-actions button { min-width: 110px; }
+.cancel-button { color: var(--text-strong); background: var(--surface); border-color: var(--border); }
+.session-error { grid-column: 1 / -1; margin: 0; color: var(--theme-text); border-left: 3px solid var(--theme-color); padding: 0.75rem; text-align: left; }
+@media (max-width: 520px) {
+  fieldset { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+  .session-actions button { flex: 1; }
+}
 </style>

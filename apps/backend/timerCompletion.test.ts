@@ -53,23 +53,32 @@ async function query(strings: TemplateStringsArray, ...values: unknown[]) {
     expect(sql).toContain('OR pl.parent_skill_id_snapshot = s.id')
     return hierarchySkills.map(skill => {
       const associated = [...sessions.values()].filter(session =>
-        (session.skillId === skill.id || session.parentSkillId === skill.id) && inRange(session, values[6], values[8]))
+        (session.skillId === skill.id || session.parentSkillId === skill.id) && inRange(session, values[18], values[20]))
       const direct = associated.filter(session => session.skillId === skill.id)
       const parent = hierarchySkills.find(item => item.id === skill.parentId)
-      const periodTotal = (start: unknown, end: unknown) => associated
-        .filter(session => {
-          const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
-          return time >= String(start) && time <= String(end)
-        }).reduce((sum, session) => sum + session.duration, 0)
+      const periodSessions = (start: unknown, end: unknown) => associated.filter(session => {
+        const time = session.completedAt.replace('T', ' ').replace(/Z$/, '')
+        return time >= String(start) && time <= String(end)
+      })
+      const periodTasks = (start: unknown, end: unknown) =>
+        new Set(periodSessions(start, end).map(session => session.taskId).filter(id => id !== null)).size
+      const periodTotal = (start: unknown, end: unknown) =>
+        periodSessions(start, end).reduce((sum, session) => sum + session.duration, 0)
       return {
         skillId: skill.id, skillName: skill.name, pomodoros: associated.length,
         parentId: skill.parentId, parentName: parent?.name ?? null,
         skillPath: parent ? `${parent.name} / ${skill.name}` : skill.name,
         directPomodoros: direct.length, directMinutes: direct.reduce((sum, session) => sum + session.duration, 0),
         minutes: associated.reduce((sum, session) => sum + session.duration, 0),
-        todayMinutes: periodTotal(values[0], values[1]),
-        weekMinutes: periodTotal(values[2], values[3]),
-        yearMinutes: periodTotal(values[4], values[5]),
+        todayTasks: periodTasks(values[0], values[1]),
+        weekTasks: periodTasks(values[2], values[3]),
+        yearTasks: periodTasks(values[4], values[5]),
+        todayPomodoros: periodSessions(values[6], values[7]).length,
+        weekPomodoros: periodSessions(values[8], values[9]).length,
+        yearPomodoros: periodSessions(values[10], values[11]).length,
+        todayMinutes: periodTotal(values[12], values[13]),
+        weekMinutes: periodTotal(values[14], values[15]),
+        yearMinutes: periodTotal(values[16], values[17]),
       }
     })
   }
@@ -627,7 +636,26 @@ describe('timer completion idempotency', () => {
         totalPomodoros: 235, totalMinutes: 235,
         breakdown: [{
           skillId: 4, minutes: 235, pomodoros: 235,
+          todayTasks: 0, weekTasks: 0, yearTasks: 0,
+          todayPomodoros: 235, weekPomodoros: 235, yearPomodoros: 235,
           todayMinutes: 235, weekMinutes: 235, yearMinutes: 235,
+        }],
+      })
+    })
+
+    test('counts distinct assigned tasks and all sessions for each skill period', async () => {
+      const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+      seed(3, now)
+      sessions.get('seed-1')!.taskId = 12
+      sessions.get('seed-2')!.taskId = 12
+      const response = await fetch(url.replace('/pomodoros', '/analytics/summary'))
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({
+        breakdown: [{
+          skillId: 4,
+          todayTasks: 1, weekTasks: 1, yearTasks: 1,
+          todayPomodoros: 3, weekPomodoros: 3, yearPomodoros: 3,
+          todayMinutes: 3, weekMinutes: 3, yearMinutes: 3,
         }],
       })
     })
